@@ -7,10 +7,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="demo-styles.css" />
     <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <style>
+  #error {
+    background-color: #ffffffdd;
+    border-radius: 16px;
+    padding: 16px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate3d(-50%, -50%, 0);
+    transition: opacity 0.3s;
+  }
+  #error.hide {
+    opacity: 0;
+    visibility: hidden;
+    transition: visibility 2s, opacity 1s 1s;
+  }
+</style>
   </head>
   <body>
       <!-- All you need to put beautiful, interactive 3D content on your site: -->
       <model-viewer
+        id="model-viewer"
         src="https://cdn.glitch.global/da9ae8cb-7dd7-4878-b455-375813f2a15b/FullScale.glb?v=1709675289628"
         style="background-color: rgb(255, 255, 255);"
         ios-src="https://cdn.glitch.me/da9ae8cb-7dd7-4878-b455-375813f2a15b/FullScale.usdz?v=1709675941824"
@@ -23,10 +41,20 @@
       </button>
       </model-viewer>
       </section>
-
-    <script
+     <script
       type="module"
       src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"
     ></script>
+    <script>
+  document.querySelector("#model-viewer").addEventListener('ar-status', (event) => {
+    if(event.detail.status === 'failed'){
+      const error = document.querySelector("#error");
+      error.classList.remove('hide');
+      error.addEventListener('transitionend',(event) => {
+        error.classList.add('hide');
+      });
+    }
+  });
+</script>
   </body>
 </html>
