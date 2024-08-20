@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>360° Car Interior View</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
+    <style>
+        body { margin: 0; }
+        a-scene { height: 100vh; }
+    </style>
+</head>
+<body>
+    <a-scene vr-mode-ui="enabled: true">
+        <a-sky src="panoramico_tiggo.jpeg" rotation="0 -90 0"></a-sky>
+
+        <!-- Add camera with universal controls -->
+        <a-entity id="cameraRig" position="0 1.6 0">
+            <a-entity camera look-controls wasd-controls="acceleration: 200">
+                <!-- Adding Hand Tracking -->
+                <a-entity oculus-hand="hand: left"></a-entity>
+                <a-entity oculus-hand="hand: right"></a-entity>
+            </a-entity>
+        </a-entity>
+
+        <!-- Lighting to improve visual quality -->
+        <a-entity light="type: ambient; intensity: 0.5"></a-entity>
+        <a-entity light="type: directional; intensity: 0.8; position: -1 1 0"></a-entity>
+    </a-scene>
+</body>
+</html>
