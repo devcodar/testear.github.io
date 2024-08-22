@@ -14,7 +14,17 @@
 </head>
 <body>
     <a-scene vr-mode-ui="enabled: true">
-        <a-sky src="Previa de teste_360_BMW_F01.jpg" rotation="0 -90 0"></a-sky>
+        <!-- Adição de um céu HDRI -->
+        <a-sky src="path/to/hdri-sky-texture.jpg"></a-sky> <!-- Substitua com o caminho para sua textura HDRI do céu -->
+        
+        <!-- Adição do chão HDRI ajustado para escala realista -->
+        <a-plane 
+            src="path/to/hdri-ground-texture.jpg" 
+            rotation="-90 0 0" 
+            width="50" 
+            height="50" 
+            repeat="10 10" 
+            position="0 0 0"></a-plane>
 
         <!-- Ajuste de escala e posição da câmera para VR -->
         <a-entity id="cameraRig" position="0 1.5 0">
@@ -32,10 +42,9 @@
             </a-entity>
         </a-entity>
 
-        <!-- Lighting to improve visual quality -->
-        <a-entity light="type: ambient; intensity: 0.5"></a-entity>
-        <a-entity light="type: directional; intensity: 0.8; position: -1 1 0"></a-entity>
+        <!-- Iluminação para melhorar a qualidade visual -->
+        <a-entity light="type: ambient; intensity: 0.7"></a-entity>
+        <a-entity light="type: directional; intensity: 0.8; position="-1 3 1"></a-entity>
     </a-scene>
 </body>
 </html>
-
