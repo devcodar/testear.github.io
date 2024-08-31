@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>&lt;model-viewer&gt; example</title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="demo-styles.css">
+    
+    <!-- The following libraries and polyfills are recommended to maximize browser support -->
+    <!-- NOTE: you must adjust the paths as appropriate for your project -->
+    
+    <!-- 💁 OPTIONAL: The :focus-visible polyfill removes the focus ring for some input types -->
+    <script src="https://unpkg.com/focus-visible@5.0.2/dist/focus-visible.js" defer></script>
+
+  </head> 
+<body>
+  <div id="card">
+    <!-- All you need to put beautiful, interactive 3D content on your site: -->
+    <model-viewer src="/fullscale.glb"
+                  environment-image="aircraft_workshop_01_1k.hdr"
+                  ar-scale="fixed"
+                  ar-placement="floor"
+                  ios-src="https://cdn.glitch.com/36cb8393-65c6-408d-a538-055ada20431b/Astronaut.usdz?v=1569545377878"
+                  alt="A 3D model of fullscalle"
+                  shadow-intensity="3"
+                  camera-controls
+                  auto-rotate ar
+                  xr-environment>
+    </model-viewer>
+    <section class="attribution">
+      <span>
+        <h1>FullScale</h1>
+        <span>By Studio Cimatec</span>
+      </span>
+    </section>
+
+    <button slot="ar-button" style="background-color: white; border-radius: 4px; border: none; position: absolute; top: 16px; right: 16px; ">
+      👋 Ative AR
+  </button>
+    
+  </div>
+  <!-- 💁 Include both scripts below to support all browsers! -->
+
+  <!-- Loads <model-viewer> for modern browsers: -->
+  <script type="module"
+      src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
+  </script>
+</body>
+</html>
