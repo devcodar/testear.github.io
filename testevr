@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Identificação de Objetos com COCO</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+    }
+    video, canvas {
+      display: block;
+      margin: 20px auto;
+      border: 1px solid #ccc;
+    }
+    #status {
+      font-size: 18px;
+      color: #333;
+    }
+    #metrics {
+      margin-top: 10px;
+      font-size: 16px;
+      color: #555;
+      text-align: left;
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Identificação de Objetos - COCO Dataset</h1>
+  <video id="videoElement" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <p id="status">Carregando modelo...</p>
+  <div id="metrics">
+    <h2>Métricas de Detecção</h2>
+    <ul id="metricsList"></ul>
+  </div>
+
+  <script>
+    const videoElement = document.getElementById('videoElement');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const metricsList = document.getElementById('metricsList');
+
+    let model;
+    const heatmap = []; // Mapa de calor para detecções
+    const objectMetrics = {}; // Métricas por classe de objeto
+
+    // Configurar e acessar a câmera
+    async function setupCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+        });
+        videoElement.srcObject = stream;
+
+        return new Promise((resolve) => {
+          videoElement.onloadedmetadata = () => {
+            videoElement.play();
+            resolve();
+          };
+        });
+      } catch (error) {
+        console.error("Erro ao acessar a câmera:", error);
+        alert("Não foi possível acessar a câmera. Verifique as permissões do navegador.");
+      }
+    }
+
+    // Carregar o modelo COCO-SSD
+    async function loadModel() {
+      model = await cocoSsd.load();
+      document.getElementById('status').innerText = 'Modelo carregado!';
+    }
+
+    // Atualizar o mapa de calor com base na detecção
+    function updateHeatmap(predictions) {
+      predictions.forEach(prediction => {
+        const [x, y, width, height] = prediction.bbox;
+        const size = width * height;
+
+        // Normalizar o tamanho e definir intensidade (maior objeto = maior intensidade)
+        const intensity = Math.min(size / (canvas.width * canvas.height), 1);
+
+        heatmap.push({ x: x + width / 2, y: y + height / 2, intensity });
+      });
+    }
+
+    // Renderizar o mapa de calor
+    function renderHeatmap() {
+      ctx.save();
+      heatmap.forEach(point => {
+        const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, 50);
+        gradient.addColorStop(0, `rgba(255, 0, 0, ${point.intensity})`);
+        gradient.addColorStop(1, "rgba(255, 0, 0, 0)");
+
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 50, 0, 2 * Math.PI);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    // Atualizar as métricas
+    function updateMetrics(predictions) {
+      predictions.forEach(prediction => {
+        const { class: className, bbox } = prediction;
+
+        // Contar a quantidade de vezes que cada classe é detectada
+        if (!objectMetrics[className]) {
+          objectMetrics[className] = { count: 0, sizes: [] };
+        }
+        objectMetrics[className].count += 1;
+
+        // Armazenar tamanhos dos objetos detectados
+        const size = bbox[2] * bbox[3]; // Largura * Altura
+        objectMetrics[className].sizes.push(size);
+      });
+
+      // Atualizar lista de métricas na tela
+      metricsList.innerHTML = "";
+      for (const [className, data] of Object.entries(objectMetrics)) {
+        const averageSize = data.sizes.reduce((a, b) => a + b, 0) / data.sizes.length;
+        const listItem = document.createElement("li");
+        listItem.textContent = `Classe: ${className}, Detecções: ${data.count}, Tamanho médio: ${averageSize.toFixed(2)} pixels²`;
+        metricsList.appendChild(listItem);
+      }
+    }
+
+    // Detectar objetos no vídeo
+    async function detectObjects() {
+      canvas.width = videoElement.videoWidth;
+      canvas.height = videoElement.videoHeight;
+
+      const predictions = await model.detect(videoElement);
+
+      // Limpar o canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Atualizar métricas e mapa de calor
+      updateMetrics(predictions);
+      updateHeatmap(predictions);
+
+      // Renderizar bounding boxes e rótulos
+      predictions.forEach((prediction) => {
+        const [x, y, width, height] = prediction.bbox;
+        const text = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
+
+        // Desenhar a caixa delimitadora
+        ctx.beginPath();
+        ctx.rect(x, y, width, height);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'green';
+        ctx.stroke();
+
+        // Adicionar o rótulo
+        ctx.fillStyle = 'green';
+        ctx.fillText(text, x, y > 10 ? y - 5 : 10);
+      });
+
+      // Renderizar o mapa de calor
+      renderHeatmap();
+
+      // Continuar detectando no próximo frame
+      requestAnimationFrame(detectObjects);
+    }
+
+    // Inicializar o sistema
+    async function init() {
+      await setupCamera();
+      await loadModel();
+      detectObjects();
+    }
+
+    init();
+  </script>
+</body>
+</html>
