@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Identificação de Objetos com Mapa de Calor</title>
+  <title>Identificação de Objetos - Mapa de Calor e Dimensões</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <style>
@@ -39,7 +39,7 @@
   </style>
 </head>
 <body>
-  <h1>Identificação de Objetos com Mapa de Calor</h1>
+  <h1>Identificação de Objetos - Mapa de Calor e Dimensões</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <p id="status">Carregando modelo...</p>
@@ -79,18 +79,15 @@
 
     // Configurar e acessar a câmera
     async function setupCamera(facingMode = "user") {
-      // Interrompe o stream atual, se existir
       if (currentStream) {
         currentStream.getTracks().forEach(track => track.stop());
       }
-
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode },
         });
         videoElement.srcObject = stream;
         currentStream = stream;
-
         return new Promise((resolve) => {
           videoElement.onloadedmetadata = () => {
             videoElement.play();
@@ -109,52 +106,37 @@
       document.getElementById('status').innerText = 'Modelo carregado!';
     }
 
-    // Verificar se um objeto já foi rastreado recentemente
-    function isNewObject(className, bbox) {
+    // Converter dimensões em pixels para centímetros
+    function convertToRealDimensions(bbox, videoWidth, videoHeight) {
       const [x, y, width, height] = bbox;
-
-      for (let obj of trackedObjects) {
-        if (
-          obj.className === className &&
-          Math.abs(obj.x - x) < OBJECT_DISTANCE_THRESHOLD &&
-          Math.abs(obj.y - y) < OBJECT_DISTANCE_THRESHOLD
-        ) {
-          return false; // Objeto já rastreado
-        }
-      }
-
-      // Adicionar o novo objeto ao rastreamento
-      trackedObjects.push({ className, x, y, width, height });
-
-      // Limitar o tamanho do rastreamento para evitar memória excessiva
-      if (trackedObjects.length > 100) {
-        trackedObjects.shift();
-      }
-
-      return true;
+      const realWidth = (width / videoWidth) * CAMERA_FOV_CM; // Largura real
+      const realHeight = (height / videoHeight) * (CAMERA_FOV_CM * (videoHeight / videoWidth)); // Altura real
+      const realArea = (realWidth * realHeight) / 10000; // Área em m²
+      return { realWidth, realHeight, realArea };
     }
 
     // Atualizar as métricas
     function updateMetrics(predictions) {
-      // Atualizar contagem com base nos objetos detectados
       predictions.forEach(prediction => {
         const { class: className, bbox } = prediction;
-
-        // Verificar se é um novo objeto
-        if (!isNewObject(className, bbox)) return;
-
-        // Incrementar a contagem do objeto
+        const { realWidth, realHeight, realArea } = convertToRealDimensions(
+          bbox,
+          videoElement.videoWidth,
+          videoElement.videoHeight
+        );
         if (!objectMetrics[className]) {
-          objectMetrics[className] = 0;
+          objectMetrics[className] = { count: 0, dimensions: [] };
         }
-        objectMetrics[className] += 1;
+        objectMetrics[className].count += 1;
+        objectMetrics[className].dimensions.push({ realWidth, realHeight, realArea });
       });
-
-      // Atualizar a interface com todas as métricas atuais
-      metricsList.innerHTML = ""; // Limpar a lista antes de recriar
-      for (const [className, count] of Object.entries(objectMetrics)) {
+      metricsList.innerHTML = ""; // Atualiza as métricas na interface
+      for (const [className, data] of Object.entries(objectMetrics)) {
+        const avgWidth = (data.dimensions.reduce((sum, dim) => sum + dim.realWidth, 0) / data.dimensions.length).toFixed(2);
+        const avgHeight = (data.dimensions.reduce((sum, dim) => sum + dim.realHeight, 0) / data.dimensions.length).toFixed(2);
+        const avgArea = (data.dimensions.reduce((sum, dim) => sum + dim.realArea, 0) / data.dimensions.length).toFixed(4);
         const listItem = document.createElement("li");
-        listItem.textContent = `Classe: ${className}, Quantidade: ${count}`;
+        listItem.textContent = `Classe: ${className}, Quantidade: ${data.count}, Largura Média: ${avgWidth} cm, Altura Média: ${avgHeight} cm, Área Média: ${avgArea} m²`;
         metricsList.appendChild(listItem);
       }
     }
@@ -164,11 +146,7 @@
       predictions.forEach(prediction => {
         const { class: className, bbox } = prediction;
         const [x, y, width, height] = bbox;
-
-        // Determinar a cor com base na classe
         const color = objectColors[className] || objectColors.default;
-
-        // Desenhar o mapa de calor no local do bounding box
         ctx.fillStyle = color;
         ctx.fillRect(x, y, width, height);
       });
@@ -177,51 +155,37 @@
     // Detectar objetos no vídeo
     async function detectObjects() {
       if (!model) return;
-
       canvas.width = videoElement.videoWidth;
       canvas.height = videoElement.videoHeight;
-
       const predictions = await model.detect(videoElement);
-
-      // Limpar o canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Atualizar métricas e renderizar mapa de calor
       updateMetrics(predictions);
       renderHeatmap(predictions);
-
-      // Renderizar bounding boxes e rótulos
-      predictions.forEach((prediction) => {
+      predictions.forEach(prediction => {
         const [x, y, width, height] = prediction.bbox;
         const text = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
-
-        // Desenhar a caixa delimitadora
         ctx.beginPath();
         ctx.rect(x, y, width, height);
         ctx.lineWidth = 2;
         ctx.strokeStyle = 'black';
         ctx.stroke();
-
-        // Adicionar o rótulo
         ctx.fillStyle = 'black';
         ctx.fillText(text, x, y > 10 ? y - 5 : 10);
       });
-
-      // Continuar detectando no próximo frame
       requestAnimationFrame(detectObjects);
     }
 
     // Trocar entre câmera frontal e traseira
     switchCameraBtn.addEventListener('click', async () => {
-      usingFrontCamera = !usingFrontCamera; // Alterna entre as câmeras
+      usingFrontCamera = !usingFrontCamera;
       const facingMode = usingFrontCamera ? "user" : "environment";
-      await setupCamera(facingMode); // Configura a câmera com o novo facingMode
-      detectObjects(); // Reinicia a detecção com o novo feed
+      await setupCamera(facingMode);
+      detectObjects();
     });
 
     // Inicializar o sistema
     async function init() {
-      await setupCamera(); // Inicializa com a câmera frontal
+      await setupCamera();
       await loadModel();
       detectObjects();
     }
