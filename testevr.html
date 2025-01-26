@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Identificação de Objetos com Métricas Persistentes</title>
+  <title>Identificação de Objetos com Dimensões e Métricas Persistentes</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <style>
@@ -39,7 +39,7 @@
   </style>
 </head>
 <body>
-  <h1>Identificação de Objetos - Métricas Persistentes</h1>
+  <h1>Identificação de Objetos - Dimensões e Métricas</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <p id="status">Carregando modelo...</p>
@@ -62,6 +62,10 @@
     const objectMetrics = {}; // Métricas por classe de objeto
     const trackedObjects = []; // Lista de objetos rastreados
     const OBJECT_DISTANCE_THRESHOLD = 50; // Distância máxima para considerar o mesmo objeto (em pixels)
+
+    // Parâmetros da câmera
+    const CAMERA_FOV_CM = 40; // Largura real aproximada do campo de visão da câmera em centímetros
+    const CAMERA_DISTANCE_CM = 50; // Distância da câmera ao objeto em centímetros
 
     // Configurar e acessar a câmera
     async function setupCamera(facingMode = "user") {
@@ -95,6 +99,16 @@
       document.getElementById('status').innerText = 'Modelo carregado!';
     }
 
+    // Converter dimensões em pixels para centímetros
+    function convertToRealDimensions(bbox, videoWidth, videoHeight) {
+      const [x, y, width, height] = bbox;
+      const realWidth = (width / videoWidth) * CAMERA_FOV_CM; // Largura real
+      const realHeight = (height / videoHeight) * (CAMERA_FOV_CM * (videoHeight / videoWidth)); // Altura real
+      const realArea = (realWidth * realHeight) / 10000; // Área em m²
+
+      return { realWidth, realHeight, realArea };
+    }
+
     // Verificar se um objeto já foi rastreado recentemente
     function isNewObject(className, bbox) {
       const [x, y, width, height] = bbox;
@@ -122,25 +136,37 @@
 
     // Atualizar as métricas
     function updateMetrics(predictions) {
-      // Atualizar contagem com base nos objetos detectados
+      // Atualizar contagem e dimensões com base nos objetos detectados
       predictions.forEach(prediction => {
         const { class: className, bbox } = prediction;
 
         // Verificar se é um novo objeto
         if (!isNewObject(className, bbox)) return;
 
+        // Dimensões reais
+        const { realWidth, realHeight, realArea } = convertToRealDimensions(
+          bbox,
+          videoElement.videoWidth,
+          videoElement.videoHeight
+        );
+
         // Incrementar a contagem do objeto
         if (!objectMetrics[className]) {
-          objectMetrics[className] = 0;
+          objectMetrics[className] = { count: 0, dimensions: [] };
         }
-        objectMetrics[className] += 1;
+        objectMetrics[className].count += 1;
+        objectMetrics[className].dimensions.push({ realWidth, realHeight, realArea });
       });
 
       // Atualizar a interface com todas as métricas atuais
       metricsList.innerHTML = ""; // Limpar a lista antes de recriar
-      for (const [className, count] of Object.entries(objectMetrics)) {
+      for (const [className, data] of Object.entries(objectMetrics)) {
+        const avgWidth = (data.dimensions.reduce((sum, dim) => sum + dim.realWidth, 0) / data.dimensions.length).toFixed(2);
+        const avgHeight = (data.dimensions.reduce((sum, dim) => sum + dim.realHeight, 0) / data.dimensions.length).toFixed(2);
+        const avgArea = (data.dimensions.reduce((sum, dim) => sum + dim.realArea, 0) / data.dimensions.length).toFixed(4);
+
         const listItem = document.createElement("li");
-        listItem.textContent = `Classe: ${className}, Quantidade: ${count}`;
+        listItem.textContent = `Classe: ${className}, Quantidade: ${data.count}, Largura Média: ${avgWidth} cm, Altura Média: ${avgHeight} cm, Área Média: ${avgArea} m²`;
         metricsList.appendChild(listItem);
       }
     }
