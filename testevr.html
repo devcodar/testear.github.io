@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Identificação de Objetos com Dimensões e Métricas Persistentes</title>
+  <title>Identificação de Objetos com Mapa de Calor</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <style>
@@ -39,7 +39,7 @@
   </style>
 </head>
 <body>
-  <h1>Identificação de Objetos - Dimensões e Métricas</h1>
+  <h1>Identificação de Objetos com Mapa de Calor</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <p id="status">Carregando modelo...</p>
@@ -65,7 +65,17 @@
 
     // Parâmetros da câmera
     const CAMERA_FOV_CM = 40; // Largura real aproximada do campo de visão da câmera em centímetros
-    const CAMERA_DISTANCE_CM = 50; // Distância da câmera ao objeto em centímetros
+
+    // Cores específicas para diferentes tipos de objetos
+    const objectColors = {
+      person: "rgba(255, 0, 0, 0.5)", // Vermelho para pessoas
+      car: "rgba(255, 0, 255, 0.5)", // Rosa para carros
+      tire: "rgba(0, 0, 255, 0.5)", // Azul para pneus
+      wheel: "rgba(255, 255, 0, 0.5)", // Amarelo para rodas
+      headlight: "rgba(255, 255, 255, 0.5)", // Branco para faróis
+      steering: "rgba(0, 255, 0, 0.5)", // Verde para volantes
+      default: "rgba(100, 100, 100, 0.5)", // Cinza para outros objetos
+    };
 
     // Configurar e acessar a câmera
     async function setupCamera(facingMode = "user") {
@@ -99,16 +109,6 @@
       document.getElementById('status').innerText = 'Modelo carregado!';
     }
 
-    // Converter dimensões em pixels para centímetros
-    function convertToRealDimensions(bbox, videoWidth, videoHeight) {
-      const [x, y, width, height] = bbox;
-      const realWidth = (width / videoWidth) * CAMERA_FOV_CM; // Largura real
-      const realHeight = (height / videoHeight) * (CAMERA_FOV_CM * (videoHeight / videoWidth)); // Altura real
-      const realArea = (realWidth * realHeight) / 10000; // Área em m²
-
-      return { realWidth, realHeight, realArea };
-    }
-
     // Verificar se um objeto já foi rastreado recentemente
     function isNewObject(className, bbox) {
       const [x, y, width, height] = bbox;
@@ -136,39 +136,42 @@
 
     // Atualizar as métricas
     function updateMetrics(predictions) {
-      // Atualizar contagem e dimensões com base nos objetos detectados
+      // Atualizar contagem com base nos objetos detectados
       predictions.forEach(prediction => {
         const { class: className, bbox } = prediction;
 
         // Verificar se é um novo objeto
         if (!isNewObject(className, bbox)) return;
 
-        // Dimensões reais
-        const { realWidth, realHeight, realArea } = convertToRealDimensions(
-          bbox,
-          videoElement.videoWidth,
-          videoElement.videoHeight
-        );
-
         // Incrementar a contagem do objeto
         if (!objectMetrics[className]) {
-          objectMetrics[className] = { count: 0, dimensions: [] };
+          objectMetrics[className] = 0;
         }
-        objectMetrics[className].count += 1;
-        objectMetrics[className].dimensions.push({ realWidth, realHeight, realArea });
+        objectMetrics[className] += 1;
       });
 
       // Atualizar a interface com todas as métricas atuais
       metricsList.innerHTML = ""; // Limpar a lista antes de recriar
-      for (const [className, data] of Object.entries(objectMetrics)) {
-        const avgWidth = (data.dimensions.reduce((sum, dim) => sum + dim.realWidth, 0) / data.dimensions.length).toFixed(2);
-        const avgHeight = (data.dimensions.reduce((sum, dim) => sum + dim.realHeight, 0) / data.dimensions.length).toFixed(2);
-        const avgArea = (data.dimensions.reduce((sum, dim) => sum + dim.realArea, 0) / data.dimensions.length).toFixed(4);
-
+      for (const [className, count] of Object.entries(objectMetrics)) {
         const listItem = document.createElement("li");
-        listItem.textContent = `Classe: ${className}, Quantidade: ${data.count}, Largura Média: ${avgWidth} cm, Altura Média: ${avgHeight} cm, Área Média: ${avgArea} m²`;
+        listItem.textContent = `Classe: ${className}, Quantidade: ${count}`;
         metricsList.appendChild(listItem);
       }
+    }
+
+    // Renderizar o mapa de calor
+    function renderHeatmap(predictions) {
+      predictions.forEach(prediction => {
+        const { class: className, bbox } = prediction;
+        const [x, y, width, height] = bbox;
+
+        // Determinar a cor com base na classe
+        const color = objectColors[className] || objectColors.default;
+
+        // Desenhar o mapa de calor no local do bounding box
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, width, height);
+      });
     }
 
     // Detectar objetos no vídeo
@@ -183,8 +186,9 @@
       // Limpar o canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Atualizar métricas
+      // Atualizar métricas e renderizar mapa de calor
       updateMetrics(predictions);
+      renderHeatmap(predictions);
 
       // Renderizar bounding boxes e rótulos
       predictions.forEach((prediction) => {
@@ -195,11 +199,11 @@
         ctx.beginPath();
         ctx.rect(x, y, width, height);
         ctx.lineWidth = 2;
-        ctx.strokeStyle = 'green';
+        ctx.strokeStyle = 'black';
         ctx.stroke();
 
         // Adicionar o rótulo
-        ctx.fillStyle = 'green';
+        ctx.fillStyle = 'black';
         ctx.fillText(text, x, y > 10 ? y - 5 : 10);
       });
 
