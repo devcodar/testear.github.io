@@ -30,6 +30,12 @@
       margin-left: auto;
       margin-right: auto;
     }
+    #switchCamera {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -41,24 +47,34 @@
     <h2>Métricas de Detecção</h2>
     <ul id="metricsList"></ul>
   </div>
+  <button id="switchCamera">Trocar Câmera</button>
 
   <script>
     const videoElement = document.getElementById('videoElement');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const metricsList = document.getElementById('metricsList');
+    const switchCameraBtn = document.getElementById('switchCamera');
 
     let model;
+    let currentStream; // Stream atual
+    let usingFrontCamera = true; // Flag para alternar entre câmera frontal e traseira
     const heatmap = []; // Mapa de calor para detecções
     const objectMetrics = {}; // Métricas por classe de objeto
 
     // Configurar e acessar a câmera
-    async function setupCamera() {
+    async function setupCamera(facingMode = "user") {
+      // Interrompe o stream atual, se existir
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480 },
+          video: { facingMode },
         });
         videoElement.srcObject = stream;
+        currentStream = stream;
 
         return new Promise((resolve) => {
           videoElement.onloadedmetadata = () => {
@@ -77,6 +93,13 @@
       model = await cocoSsd.load();
       document.getElementById('status').innerText = 'Modelo carregado!';
     }
+
+    // Trocar entre câmera frontal e traseira
+    switchCameraBtn.addEventListener('click', async () => {
+      usingFrontCamera = !usingFrontCamera; // Alterna entre as câmeras
+      const facingMode = usingFrontCamera ? "user" : "environment";
+      await setupCamera(facingMode); // Configura a câmera com o novo facingMode
+    });
 
     // Atualizar o mapa de calor com base na detecção
     function updateHeatmap(predictions) {
@@ -173,7 +196,7 @@
 
     // Inicializar o sistema
     async function init() {
-      await setupCamera();
+      await setupCamera(); // Inicializa com a câmera frontal
       await loadModel();
       detectObjects();
     }
