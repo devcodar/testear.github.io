@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detecção de Objetos e Poses</title>
+  <title>Detecção de Objetos, Poses e VR</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
@@ -28,63 +28,123 @@
       border-radius: 10px;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
+
+    #metrics, #logContainer {
+      width: 90%;
+      max-width: 640px;
+      background: #f0f0f0;
+      border-radius: 20px;
+      padding: 20px;
+      margin-top: 20px;
+      overflow-y: auto;
+      max-height: 200px;
+    }
+
+    #logContainer {
+      background: #222;
+      color: #0f0;
+      font-family: monospace;
+    }
+
+    #controls button {
+      background: #e0e0e0;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 20px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #555;
+      margin: 10px;
+      box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
+      cursor: pointer;
+    }
+
+    #controls button:active {
+      box-shadow: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
+      transform: scale(0.95);
+    }
   </style>
 </head>
 <body>
-  <h1>Detecção de Objetos e Poses em Tempo Real</h1>
+  <h1>Detecção de Objetos, Poses e VR</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
-  <p id="status">Carregando modelos...</p>
+  <div id="metrics">
+    <h2>Métricas em Tempo Real</h2>
+    <ul id="metricsList"></ul>
+  </div>
+  <div id="logContainer">
+    <ul id="logList"></ul>
+  </div>
+  <div id="controls">
+    <button id="switchCamera">Trocar Câmera</button>
+    <button id="pauseCapture">Pausar Captura</button>
+    <button id="startVR">Ativar VR</button>
+    <button id="downloadReport">Baixar Relatório</button>
+  </div>
 
   <script>
     const videoElement = document.getElementById("videoElement");
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
-    const statusElement = document.getElementById("status");
+    const metricsList = document.getElementById("metricsList");
+    const logList = document.getElementById("logList");
+    const switchCameraBtn = document.getElementById("switchCamera");
+    const pauseCaptureBtn = document.getElementById("pauseCapture");
+    const startVRBtn = document.getElementById("startVR");
+    const downloadReportBtn = document.getElementById("downloadReport");
 
-    let cocoModel, poseModel;
+    let cocoModel, poseModel, xrSession;
+    let currentStream;
+    let usingFrontCamera = true;
+    let isPaused = false;
+    const detectionResults = [];
+    const objectMetrics = {};
 
-    // Configuração da câmera
-    async function setupCamera() {
+    async function setupCamera(facingMode = "user") {
+      if (currentStream) {
+        currentStream.getTracks().forEach((track) => track.stop());
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+        video: { facingMode },
       });
       videoElement.srcObject = stream;
-
-      await new Promise((resolve) => {
-        videoElement.onloadedmetadata = resolve;
-      });
+      currentStream = stream;
     }
 
-    // Carregar os modelos COCO-SSD e PoseNet
     async function loadModels() {
-      statusElement.textContent = "Carregando modelos...";
       cocoModel = await cocoSsd.load();
       poseModel = await posenet.load();
-      statusElement.textContent = "Modelos carregados! Iniciando detecção...";
+      logMessage("Modelos COCO-SSD e PoseNet carregados!");
     }
 
-    // Detectar poses e objetos
-    async function detect() {
-      // Limpar o canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Desenhar o vídeo no canvas
-      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-
-      // Detecção de objetos
-      const objects = await cocoModel.detect(videoElement);
-      renderObjects(objects);
-
-      // Detecção de poses
-      const pose = await poseModel.estimateSinglePose(videoElement, { flipHorizontal: false });
-      renderPose(pose);
-
-      // Loop contínuo
-      requestAnimationFrame(detect);
+    function logMessage(message) {
+      const logItem = document.createElement("li");
+      logItem.textContent = message;
+      logList.appendChild(logItem);
+      logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
     }
 
-    // Renderizar objetos detectados
+    function updateMetrics(predictions, type) {
+      predictions.forEach((prediction) => {
+        const className = prediction.class || "Pose";
+        if (!objectMetrics[className]) objectMetrics[className] = { count: 0 };
+        objectMetrics[className].count += 1;
+        logMessage(`${type}: ${className} detectado.`);
+      });
+
+      renderMetrics();
+    }
+
+    function renderMetrics() {
+      metricsList.innerHTML = "";
+      for (const [key, data] of Object.entries(objectMetrics)) {
+        const li = document.createElement("li");
+        li.textContent = `${key}: ${data.count} vezes`;
+        metricsList.appendChild(li);
+      }
+    }
+
     function renderObjects(objects) {
       objects.forEach((obj) => {
         const [x, y, width, height] = obj.bbox;
@@ -98,7 +158,6 @@
       });
     }
 
-    // Renderizar pose detectada
     function renderPose(pose) {
       pose.keypoints.forEach((keypoint) => {
         if (keypoint.score > 0.5) {
@@ -109,7 +168,6 @@
         }
       });
 
-      // Conexões entre pontos (esqueleto)
       const adjacentKeyPoints = posenet.getAdjacentKeyPoints(pose.keypoints, 0.5);
       adjacentKeyPoints.forEach(([from, to]) => {
         ctx.beginPath();
@@ -121,20 +179,62 @@
       });
     }
 
-    // Inicialização
+    async function detectLoop() {
+      if (isPaused) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+      const objects = await cocoModel.detect(videoElement);
+      renderObjects(objects);
+      updateMetrics(objects, "Objeto");
+
+      const pose = await poseModel.estimateSinglePose(videoElement);
+      renderPose(pose);
+      updateMetrics([pose], "Pose");
+
+      requestAnimationFrame(detectLoop);
+    }
+
+    switchCameraBtn.addEventListener("click", async () => {
+      usingFrontCamera = !usingFrontCamera;
+      await setupCamera(usingFrontCamera ? "user" : "environment");
+    });
+
+    pauseCaptureBtn.addEventListener("click", () => {
+      isPaused = !isPaused;
+      pauseCaptureBtn.textContent = isPaused ? "Retomar Captura" : "Pausar Captura";
+      if (!isPaused) detectLoop();
+    });
+
+    startVRBtn.addEventListener("click", async () => {
+      if (navigator.xr) {
+        xrSession = await navigator.xr.requestSession("immersive-vr");
+        document.body.style.display = "none";
+        alert("Modo VR Ativado!");
+      } else {
+        alert("Dispositivo não suporta VR.");
+      }
+    });
+
+    downloadReportBtn.addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(objectMetrics, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "metrics_report.json";
+      link.click();
+    });
+
     async function init() {
-      canvas.width = 640; // Largura do canvas
-      canvas.height = 480; // Altura do canvas
+      canvas.width = 640;
+      canvas.height = 480;
 
       await setupCamera();
       await loadModels();
-      detect();
+      detectLoop();
     }
 
-    init().catch((err) => {
-      console.error(err);
-      statusElement.textContent = `Erro: ${err.message}`;
-    });
+    init();
   </script>
 </body>
 </html>
