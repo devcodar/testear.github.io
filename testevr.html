@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detecção de Objetos, Poses e VR</title>
+  <title>Detecção de Objetos, Poses e Métricas</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
@@ -66,7 +66,7 @@
   </style>
 </head>
 <body>
-  <h1>Detecção de Objetos, Poses e VR</h1>
+  <h1>Detecção de Objetos, Poses e Métricas</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <div id="metrics">
@@ -100,8 +100,9 @@
     let isPaused = false;
     const detectionResults = [];
     const objectMetrics = {};
+    const CAMERA_FOV_CM = 40; // Campo de visão estimado da câmera em cm
 
-    async function setupCamera(facingMode = "user") {
+    async function setupCamera(facingMode = "environment") {
       if (currentStream) {
         currentStream.getTracks().forEach((track) => track.stop());
       }
@@ -125,12 +126,26 @@
       logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
     }
 
-    function updateMetrics(predictions, type) {
-      predictions.forEach((prediction) => {
-        const className = prediction.class || "Pose";
-        if (!objectMetrics[className]) objectMetrics[className] = { count: 0 };
+    function updateMetrics(predictions) {
+      predictions.forEach((obj) => {
+        const className = obj.class;
+        const dimensions = obj.bbox
+          ? convertToRealDimensions(obj.bbox, videoElement.videoWidth, videoElement.videoHeight)
+          : null;
+
+        if (!objectMetrics[className]) {
+          objectMetrics[className] = { count: 0, dimensions: [] };
+        }
         objectMetrics[className].count += 1;
-        logMessage(`${type}: ${className} detectado.`);
+        if (dimensions) objectMetrics[className].dimensions.push(dimensions);
+
+        logMessage(
+          `Objeto: ${className} | Dimensões: ${
+            dimensions
+              ? `${dimensions.realWidth.toFixed(2)} cm x ${dimensions.realHeight.toFixed(2)} cm (Área: ${dimensions.areaM2.toFixed(2)} m²)`
+              : "N/A"
+          }`
+        );
       });
 
       renderMetrics();
@@ -139,10 +154,28 @@
     function renderMetrics() {
       metricsList.innerHTML = "";
       for (const [key, data] of Object.entries(objectMetrics)) {
+        const avgWidth = data.dimensions.length
+          ? (data.dimensions.reduce((sum, dim) => sum + dim.realWidth, 0) / data.dimensions.length).toFixed(2)
+          : "N/A";
+        const avgHeight = data.dimensions.length
+          ? (data.dimensions.reduce((sum, dim) => sum + dim.realHeight, 0) / data.dimensions.length).toFixed(2)
+          : "N/A";
+        const avgArea = data.dimensions.length
+          ? (data.dimensions.reduce((sum, dim) => sum + dim.areaM2, 0) / data.dimensions.length).toFixed(2)
+          : "N/A";
+
         const li = document.createElement("li");
-        li.textContent = `${key}: ${data.count} vezes`;
+        li.textContent = `${key}: ${data.count} vezes | Média: ${avgWidth} cm x ${avgHeight} cm (Área: ${avgArea} m²)`;
         metricsList.appendChild(li);
       }
+    }
+
+    function convertToRealDimensions(bbox, videoWidth, videoHeight) {
+      const [x, y, width, height] = bbox;
+      const realWidth = (width / videoWidth) * CAMERA_FOV_CM;
+      const realHeight = (height / videoHeight) * (CAMERA_FOV_CM * (videoHeight / videoWidth));
+      const areaM2 = (realWidth / 100) * (realHeight / 100); // Convertendo para m²
+      return { realWidth, realHeight, areaM2 };
     }
 
     function renderObjects(objects) {
@@ -187,11 +220,10 @@
 
       const objects = await cocoModel.detect(videoElement);
       renderObjects(objects);
-      updateMetrics(objects, "Objeto");
+      updateMetrics(objects);
 
       const pose = await poseModel.estimateSinglePose(videoElement);
       renderPose(pose);
-      updateMetrics([pose], "Pose");
 
       requestAnimationFrame(detectLoop);
     }
