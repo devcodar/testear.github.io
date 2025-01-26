@@ -3,38 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inspeção de Veículos - Responsivo e VR</title>
+  <title>Inspeção com PoseNet e Métricas</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/yolo"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
   <style>
-    /* Corpo geral */
     body {
       font-family: 'Arial', sans-serif;
       margin: 0;
       background: linear-gradient(145deg, #e6e6e6, #ffffff);
-      color: #333;
       text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      overflow-x: hidden;
     }
 
     h1 {
       font-size: 2.5em;
       margin-bottom: 20px;
-      color: #222;
     }
 
-    /* Contêineres responsivos */
-    #metrics, #logContainer, #dashboard {
+    video, canvas {
+      width: 90%;
+      max-width: 640px;
+      margin-top: 20px;
+      border-radius: 10px;
+      box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    #metrics, #logContainer {
       width: 90%;
       max-width: 640px;
       background: #f0f0f0;
       border-radius: 20px;
-      box-shadow: 10px 10px 20px #bebebe, -10px -10px 20px #ffffff;
       padding: 20px;
       margin-top: 20px;
       overflow-y: auto;
@@ -47,16 +49,6 @@
       font-family: monospace;
     }
 
-    /* Canvas e vídeo */
-    canvas, video {
-      width: 90%;
-      max-width: 640px;
-      border-radius: 20px;
-      box-shadow: 10px 10px 20px #bebebe, -10px -10px 20px #ffffff;
-      margin-top: 20px;
-    }
-
-    /* Botões */
     #controls button {
       background: #e0e0e0;
       border: none;
@@ -68,31 +60,18 @@
       margin: 10px;
       box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
       cursor: pointer;
-      transition: all 0.2s ease-in-out;
     }
 
     #controls button:active {
       box-shadow: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
       transform: scale(0.95);
     }
-
-    /* Responsividade */
-    @media (max-width: 768px) {
-      h1 {
-        font-size: 1.8em;
-      }
-      #controls button {
-        padding: 8px 16px;
-        font-size: 14px;
-      }
-    }
   </style>
 </head>
 <body>
-  <h1>Inspeção de Veículos</h1>
+  <h1>Detecção de Poses e Métricas</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
-  <p id="status">Carregando modelo...</p>
   <div id="metrics">
     <h2>Métricas em Tempo Real</h2>
     <ul id="metricsList"></ul>
@@ -103,7 +82,6 @@
   <div id="controls">
     <button id="switchCamera">Trocar Câmera</button>
     <button id="pauseCapture">Pausar Captura</button>
-    <button id="startVR">Ativar VR</button>
     <button id="downloadReport">Baixar Relatório</button>
   </div>
 
@@ -115,21 +93,14 @@
     const logList = document.getElementById('logList');
     const switchCameraBtn = document.getElementById('switchCamera');
     const pauseCaptureBtn = document.getElementById('pauseCapture');
-    const startVRBtn = document.getElementById('startVR');
     const downloadReportBtn = document.getElementById('downloadReport');
 
     let model;
     let currentStream;
     let usingFrontCamera = true;
     let isPaused = false;
-    let xrSession;
-    const objectMetrics = {};
     const detectionResults = [];
 
-    const vehicleClasses = ["Car", "Wheel", "Land vehicle", "Vehicle"];
-    const CAMERA_FOV_CM = 40;
-
-    // Configurar a câmera
     async function setupCamera(facingMode = "user") {
       if (currentStream) {
         currentStream.getTracks().forEach(track => track.stop());
@@ -141,130 +112,112 @@
       currentStream = stream;
     }
 
-    // Carregar o modelo YOLO
     async function loadModel() {
-      model = await yolo.load();
-      document.getElementById('status').innerText = 'Modelo carregado!';
+      model = await posenet.load();
+      logMessage("Modelo PoseNet carregado!");
     }
 
-    // Atualizar métricas
-    function updateMetrics(predictions) {
-      predictions.forEach(prediction => {
-        const { class: className, bbox } = prediction;
-        if (!vehicleClasses.includes(className)) return;
-
-        const dimensions = convertToRealDimensions(
-          bbox,
-          videoElement.videoWidth,
-          videoElement.videoHeight
-        );
-
-        if (!objectMetrics[className]) objectMetrics[className] = { count: 0, dimensions: [] };
-        objectMetrics[className].count += 1;
-        objectMetrics[className].dimensions.push(dimensions);
-
-        detectionResults.push({
-          part: className,
-          dimensions,
-          message: `${className} detectado com largura: ${dimensions.realWidth.toFixed(2)} cm, altura: ${dimensions.realHeight.toFixed(2)} cm.`,
-        });
-
-        const logItem = document.createElement('li');
-        logItem.textContent = `${className} detectado | Dimensões: ${dimensions.realWidth.toFixed(2)} x ${dimensions.realHeight.toFixed(2)} cm`;
-        logList.appendChild(logItem);
-        logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
-      });
-
-      updateUI();
+    function logMessage(message) {
+      const logItem = document.createElement('li');
+      logItem.textContent = message;
+      logList.appendChild(logItem);
+      logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
     }
 
-    // Converter dimensões para unidades reais
-    function convertToRealDimensions(bbox, videoWidth, videoHeight) {
-      const [x, y, width, height] = bbox;
-      const realWidth = (width / videoWidth) * CAMERA_FOV_CM;
-      const realHeight = (height / videoHeight) * (CAMERA_FOV_CM * (videoHeight / videoWidth));
-      return { realWidth, realHeight };
-    }
-
-    // Renderizar mapa de calor
-    function renderHeatmap(predictions) {
-      predictions.forEach(prediction => {
-        const { bbox, class: className } = prediction;
-
-        if (!vehicleClasses.includes(className)) return;
-
-        const [x, y, width, height] = bbox;
-
-        const gradient = ctx.createRadialGradient(
-          x + width / 2,
-          y + height / 2,
-          0,
-          x + width / 2,
-          y + height / 2,
-          Math.max(width, height)
-        );
-        gradient.addColorStop(0, "rgba(255, 0, 0, 0.8)");
-        gradient.addColorStop(1, "rgba(255, 0, 0, 0)");
-
-        ctx.fillStyle = gradient;
-        ctx.fillRect(x, y, width, height);
-      });
-    }
-
-    // Ativar Realidade Virtual
-    async function startVR() {
-      if (navigator.xr) {
-        xrSession = await navigator.xr.requestSession("immersive-vr");
-        document.body.style.display = "none"; // Oculta UI no Quest 3
-        alert("Entrando no modo VR!");
-      } else {
-        alert("Dispositivo não suporta VR.");
-      }
-    }
-
-    // Loop de detecção
-    async function detectionLoop() {
+    async function detectPose() {
       if (isPaused) return;
 
+      const pose = await model.estimateSinglePose(videoElement, {
+        flipHorizontal: false,
+      });
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const predictions = await model.detect(videoElement);
+      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
-      updateMetrics(predictions);
-      renderHeatmap(predictions);
+      // Renderizar pose
+      renderPose(pose);
+      renderHeatmap(pose);
 
-      requestAnimationFrame(detectionLoop);
+      requestAnimationFrame(detectPose);
     }
 
-    // Inicializar
-    async function init() {
-      await setupCamera();
-      await loadModel();
-      detectionLoop();
+    function renderPose(pose) {
+      pose.keypoints.forEach(keypoint => {
+        if (keypoint.score > 0.5) {
+          ctx.beginPath();
+          ctx.arc(keypoint.position.x, keypoint.position.y, 5, 0, 2 * Math.PI);
+          ctx.fillStyle = "red";
+          ctx.fill();
+        }
+      });
+
+      // Conectar os pontos
+      drawSkeleton(pose.keypoints, ctx);
     }
 
-    init();
+    function drawSkeleton(keypoints, ctx) {
+      const adjacentKeyPoints = posenet.getAdjacentKeyPoints(keypoints, 0.5);
+      adjacentKeyPoints.forEach(([from, to]) => {
+        ctx.beginPath();
+        ctx.moveTo(from.position.x, from.position.y);
+        ctx.lineTo(to.position.x, to.position.y);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "blue";
+        ctx.stroke();
+      });
+    }
 
-    // Botões
-    switchCameraBtn.addEventListener('click', async () => {
+    function renderHeatmap(pose) {
+      pose.keypoints.forEach(keypoint => {
+        if (keypoint.score > 0.5) {
+          const gradient = ctx.createRadialGradient(
+            keypoint.position.x,
+            keypoint.position.y,
+            0,
+            keypoint.position.x,
+            keypoint.position.y,
+            20
+          );
+          gradient.addColorStop(0, "rgba(255, 0, 0, 0.8)");
+          gradient.addColorStop(1, "rgba(255, 0, 0, 0)");
+
+          ctx.fillStyle = gradient;
+          ctx.fillRect(
+            keypoint.position.x - 10,
+            keypoint.position.y - 10,
+            20,
+            20
+          );
+        }
+      });
+    }
+
+    switchCameraBtn.addEventListener("click", async () => {
       usingFrontCamera = !usingFrontCamera;
-      await setupCamera(usingFrontCamera ? 'user' : 'environment');
+      await setupCamera(usingFrontCamera ? "user" : "environment");
     });
 
-    pauseCaptureBtn.addEventListener('click', () => {
+    pauseCaptureBtn.addEventListener("click", () => {
       isPaused = !isPaused;
       pauseCaptureBtn.textContent = isPaused ? "Retomar Captura" : "Pausar Captura";
-      if (!isPaused) detectionLoop();
+      if (!isPaused) detectPose();
     });
 
-    startVRBtn.addEventListener('click', startVR);
-
-    downloadReportBtn.addEventListener('click', () => {
+    downloadReportBtn.addEventListener("click", () => {
       const blob = new Blob([JSON.stringify(detectionResults, null, 2)], { type: "application/json" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
-      link.download = "vehicle_inspection_report.json";
+      link.download = "pose_report.json";
       link.click();
     });
+
+    async function init() {
+      await setupCamera();
+      await loadModel();
+      detectPose();
+    }
+
+    init();
   </script>
 </body>
 </html>
