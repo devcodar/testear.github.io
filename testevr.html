@@ -9,225 +9,132 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
   <style>
     body {
-      font-family: 'Arial', sans-serif;
+      font-family: Arial, sans-serif;
       margin: 0;
-      background: linear-gradient(145deg, #e6e6e6, #ffffff);
       text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
+      background: #f4f4f9;
+      color: #333;
     }
 
     h1 {
-      font-size: 2.5em;
-      margin-bottom: 20px;
+      margin-top: 20px;
+      font-size: 2rem;
     }
 
     video, canvas {
       width: 90%;
       max-width: 640px;
-      margin-top: 20px;
+      margin: 20px auto;
       border-radius: 10px;
-      box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    #metrics, #logContainer {
-      width: 90%;
-      max-width: 640px;
-      background: #f0f0f0;
-      border-radius: 20px;
-      padding: 20px;
-      margin-top: 20px;
-      overflow-y: auto;
-      max-height: 200px;
-    }
-
-    #logContainer {
-      background: #222;
-      color: #0f0;
-      font-family: monospace;
-    }
-
-    #controls button {
-      background: #e0e0e0;
-      border: none;
-      border-radius: 12px;
-      padding: 10px 20px;
-      font-size: 16px;
-      font-weight: bold;
-      color: #555;
-      margin: 10px;
-      box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
-      cursor: pointer;
-    }
-
-    #controls button:active {
-      box-shadow: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
-      transform: scale(0.95);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
   </style>
 </head>
 <body>
-  <h1>Detecção de Objetos e Poses</h1>
+  <h1>Detecção de Objetos e Poses em Tempo Real</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
-  <div id="metrics">
-    <h2>Métricas em Tempo Real</h2>
-    <ul id="metricsList"></ul>
-  </div>
-  <div id="logContainer">
-    <ul id="logList"></ul>
-  </div>
-  <div id="controls">
-    <button id="switchCamera">Trocar Câmera</button>
-    <button id="pauseCapture">Pausar Captura</button>
-    <button id="downloadReport">Baixar Relatório</button>
-  </div>
+  <p id="status">Carregando modelos...</p>
 
   <script>
-    const videoElement = document.getElementById('videoElement');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const metricsList = document.getElementById('metricsList');
-    const logList = document.getElementById('logList');
-    const switchCameraBtn = document.getElementById('switchCamera');
-    const pauseCaptureBtn = document.getElementById('pauseCapture');
-    const downloadReportBtn = document.getElementById('downloadReport');
+    const videoElement = document.getElementById("videoElement");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const statusElement = document.getElementById("status");
 
     let cocoModel, poseModel;
-    let currentStream;
-    let usingFrontCamera = true;
-    let isPaused = false;
-    const objectMetrics = {};
-    const detectionResults = [];
-    const CAMERA_FOV_CM = 40;
 
-    async function setupCamera(facingMode = "environment") {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-      }
+    // Configuração da câmera
+    async function setupCamera() {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode },
+        video: { facingMode: "user" },
       });
       videoElement.srcObject = stream;
-      currentStream = stream;
+
+      await new Promise((resolve) => {
+        videoElement.onloadedmetadata = resolve;
+      });
     }
 
+    // Carregar os modelos COCO-SSD e PoseNet
     async function loadModels() {
+      statusElement.textContent = "Carregando modelos...";
       cocoModel = await cocoSsd.load();
       poseModel = await posenet.load();
-      logMessage("Modelos COCO-SSD e PoseNet carregados!");
+      statusElement.textContent = "Modelos carregados! Iniciando detecção...";
     }
 
-    function logMessage(message) {
-      const logItem = document.createElement('li');
-      logItem.textContent = message;
-      logList.appendChild(logItem);
-      logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
-    }
-
-    function updateMetrics(predictions, type) {
-      predictions.forEach(prediction => {
-        const { class: className, bbox } = prediction;
-        const dimensions = bbox
-          ? convertToRealDimensions(bbox, videoElement.videoWidth, videoElement.videoHeight)
-          : null;
-
-        if (!objectMetrics[className]) objectMetrics[className] = { count: 0, dimensions: [] };
-        objectMetrics[className].count += 1;
-        if (dimensions) objectMetrics[className].dimensions.push(dimensions);
-
-        logMessage(`${type}: ${className} detectado. Dimensões: ${dimensions ? `${dimensions.realWidth.toFixed(2)}x${dimensions.realHeight.toFixed(2)} cm` : "N/A"}`);
-      });
-
-      renderMetrics();
-    }
-
-    function renderMetrics() {
-      metricsList.innerHTML = '';
-      for (const [key, data] of Object.entries(objectMetrics)) {
-        const avgWidth = data.dimensions.length
-          ? (data.dimensions.reduce((sum, dim) => sum + dim.realWidth, 0) / data.dimensions.length).toFixed(2)
-          : "N/A";
-        const avgHeight = data.dimensions.length
-          ? (data.dimensions.reduce((sum, dim) => sum + dim.realHeight, 0) / data.dimensions.length).toFixed(2)
-          : "N/A";
-
-        const li = document.createElement('li');
-        li.textContent = `${key}: ${data.count} vezes | Tamanho Médio: ${avgWidth} x ${avgHeight} cm`;
-        metricsList.appendChild(li);
-      }
-    }
-
-    function convertToRealDimensions(bbox, videoWidth, videoHeight) {
-      const [x, y, width, height] = bbox;
-      const realWidth = (width / videoWidth) * CAMERA_FOV_CM;
-      const realHeight = (height / videoHeight) * (CAMERA_FOV_CM * (videoHeight / videoWidth));
-      return { realWidth, realHeight };
-    }
-
-    function renderHeatmap(predictions) {
-      predictions.forEach(prediction => {
-        const [x, y, width, height] = prediction.bbox || [];
-        const gradient = ctx.createRadialGradient(
-          x + width / 2,
-          y + height / 2,
-          0,
-          x + width / 2,
-          y + height / 2,
-          Math.max(width, height)
-        );
-        gradient.addColorStop(0, "rgba(255, 0, 0, 0.8)");
-        gradient.addColorStop(1, "rgba(255, 0, 0, 0)");
-        ctx.fillStyle = gradient;
-        ctx.fillRect(x, y, width, height);
-      });
-    }
-
-    async function detectLoop() {
-      if (isPaused) return;
-
+    // Detectar poses e objetos
+    async function detect() {
+      // Limpar o canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Desenhar o vídeo no canvas
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
-      const cocoPredictions = await cocoModel.detect(videoElement);
-      const pose = await poseModel.estimateSinglePose(videoElement);
+      // Detecção de objetos
+      const objects = await cocoModel.detect(videoElement);
+      renderObjects(objects);
 
-      renderHeatmap(cocoPredictions);
-      updateMetrics(cocoPredictions, "Objeto");
-      updateMetrics([pose], "Pose");
+      // Detecção de poses
+      const pose = await poseModel.estimateSinglePose(videoElement, { flipHorizontal: false });
+      renderPose(pose);
 
-      requestAnimationFrame(detectLoop);
+      // Loop contínuo
+      requestAnimationFrame(detect);
     }
 
-    switchCameraBtn.addEventListener("click", async () => {
-      usingFrontCamera = !usingFrontCamera;
-      await setupCamera(usingFrontCamera ? "user" : "environment");
-    });
+    // Renderizar objetos detectados
+    function renderObjects(objects) {
+      objects.forEach((obj) => {
+        const [x, y, width, height] = obj.bbox;
+        ctx.strokeStyle = "green";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
 
-    pauseCaptureBtn.addEventListener("click", () => {
-      isPaused = !isPaused;
-      pauseCaptureBtn.textContent = isPaused ? "Retomar Captura" : "Pausar Captura";
-      if (!isPaused) detectLoop();
-    });
+        ctx.fillStyle = "green";
+        ctx.font = "16px Arial";
+        ctx.fillText(`${obj.class} (${(obj.score * 100).toFixed(1)}%)`, x, y > 10 ? y - 5 : 10);
+      });
+    }
 
-    downloadReportBtn.addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify(objectMetrics, null, 2)], { type: "application/json" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "metrics_report.json";
-      link.click();
-    });
+    // Renderizar pose detectada
+    function renderPose(pose) {
+      pose.keypoints.forEach((keypoint) => {
+        if (keypoint.score > 0.5) {
+          ctx.beginPath();
+          ctx.arc(keypoint.position.x, keypoint.position.y, 5, 0, 2 * Math.PI);
+          ctx.fillStyle = "red";
+          ctx.fill();
+        }
+      });
 
+      // Conexões entre pontos (esqueleto)
+      const adjacentKeyPoints = posenet.getAdjacentKeyPoints(pose.keypoints, 0.5);
+      adjacentKeyPoints.forEach(([from, to]) => {
+        ctx.beginPath();
+        ctx.moveTo(from.position.x, from.position.y);
+        ctx.lineTo(to.position.x, to.position.y);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "blue";
+        ctx.stroke();
+      });
+    }
+
+    // Inicialização
     async function init() {
+      canvas.width = 640; // Largura do canvas
+      canvas.height = 480; // Altura do canvas
+
       await setupCamera();
       await loadModels();
-      detectLoop();
+      detect();
     }
 
-    init();
+    init().catch((err) => {
+      console.error(err);
+      statusElement.textContent = `Erro: ${err.message}`;
+    });
   </script>
 </body>
 </html>
