@@ -101,6 +101,14 @@
     const detectionResults = [];
     const objectMetrics = {};
 
+    // Configurações do PoseNet
+    const poseNetConfig = {
+      architecture: 'MobileNetV1',
+      outputStride: 16,
+      inputResolution: { width: 640, height: 480 },
+      scoreThreshold: 0.5,
+    };
+
     async function setupCamera(facingMode = "user") {
       if (currentStream) {
         currentStream.getTracks().forEach((track) => track.stop());
@@ -114,7 +122,7 @@
 
     async function loadModels() {
       cocoModel = await cocoSsd.load();
-      poseModel = await posenet.load();
+      poseModel = await posenet.load(poseNetConfig);
       logMessage("Modelos COCO-SSD e PoseNet carregados!");
     }
 
@@ -236,7 +244,7 @@
       renderObjects(objects);
       updateMetrics(objects, "Objeto");
 
-      const pose = await poseModel.estimateSinglePose(videoElement);
+      const pose = await poseModel.estimateSinglePose(videoElement, poseNetConfig);
       renderPose(pose);
       updateMetrics([pose], "Pose");
 
