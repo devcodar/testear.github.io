@@ -91,8 +91,9 @@
     let currentStream;
     let usingFrontCamera = true;
     let isPaused = false;
+    let detectionCount = {};
     let reportData = [];
-    const FOV = 60; // Campo de visão da câmera (em graus)
+    const FOV = 60; // Campo de visão da câmera em graus
     const CAMERA_DISTANCE = 1.5; // Distância estimada da câmera ao objeto (em metros)
 
     async function setupCamera(facingMode = "user") {
@@ -112,7 +113,11 @@
     function convertToRealScale(pixelValue) {
       const screenWidth = canvas.width;
       const realScaleFactor = (2 * CAMERA_DISTANCE * Math.tan((FOV / 2) * (Math.PI / 180))) / screenWidth;
-      return (pixelValue * realScaleFactor).toFixed(4); // Retorna em metros
+      return (pixelValue * realScaleFactor).toFixed(2); // Retorna em metros
+    }
+
+    function calculateDistance(p1, p2) {
+      return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
     }
 
     function logMessage(message) {
@@ -120,6 +125,26 @@
       logItem.textContent = message;
       logList.appendChild(logItem);
       logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
+    }
+
+    function renderObjects(objects) {
+      objects.forEach((obj) => {
+        const [x, y, width, height] = obj.bbox;
+
+        detectionCount[obj.class] = (detectionCount[obj.class] || 0) + 1;
+        const count = detectionCount[obj.class];
+
+        ctx.strokeStyle = "blue";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+        ctx.fillStyle = "blue";
+        ctx.font = "16px Arial";
+        ctx.fillText(`${obj.class} (${count}x)`, x, y > 10 ? y - 5 : 10);
+
+        const areaMeters = (convertToRealScale(width) * convertToRealScale(height)).toFixed(4);
+        logMessage(`Objeto: ${obj.class} - Área: ${areaMeters} m² - Detecções: ${count}`);
+        reportData.push({ type: "object", class: obj.class, count, areaMeters });
+      });
     }
 
     function renderPose(pose) {
@@ -130,23 +155,13 @@
           ctx.fillStyle = "red";
           ctx.fill();
 
+          const position = `(${keypoint.position.x.toFixed(1)}, ${keypoint.position.y.toFixed(1)})`;
           ctx.fillStyle = "yellow";
           ctx.font = "10px Arial";
-          ctx.fillText(
-            `${keypoint.part}: (${keypoint.position.x.toFixed(1)}, ${keypoint.position.y.toFixed(1)})`,
-            keypoint.position.x + 5,
-            keypoint.position.y + 5
-          );
+          ctx.fillText(`${keypoint.part}: ${position}`, keypoint.position.x + 5, keypoint.position.y + 5);
 
-          logMessage(
-            `Keypoint: ${keypoint.part} - X: ${keypoint.position.x.toFixed(1)}, Y: ${keypoint.position.y.toFixed(1)}`
-          );
-          reportData.push({
-            type: "keypoint",
-            part: keypoint.part,
-            position: keypoint.position,
-            score: keypoint.score,
-          });
+          logMessage(`Keypoint: ${keypoint.part} - Posição: ${position}`);
+          reportData.push({ type: "keypoint", part: keypoint.part, position: keypoint.position });
         }
       });
     }
@@ -154,13 +169,9 @@
     function checkErgonomicStandards(pose) {
       const leftShoulder = pose.keypoints[5].position;
       const rightShoulder = pose.keypoints[6].position;
-      const leftHip = pose.keypoints[11].position;
 
       const shoulderWidth = convertToRealScale(
-        Math.sqrt(
-          Math.pow(leftShoulder.x - rightShoulder.x, 2) +
-          Math.pow(leftShoulder.y - rightShoulder.y, 2)
-        )
+        calculateDistance(leftShoulder, rightShoulder)
       );
       const shoulderWidthCm = (shoulderWidth * 100).toFixed(2);
 
@@ -174,7 +185,10 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
-      const pose = await poseModel.estimateSinglePose(videoElement, { flipHorizontal: false });
+      const objects = await cocoModel.detect(videoElement);
+      renderObjects(objects);
+
+      const pose = await poseModel.estimateSinglePose(videoElement);
       renderPose(pose);
       checkErgonomicStandards(pose);
 
