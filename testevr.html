@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detecção de Objetos e Análise Ergonômica</title>
+  <title>Detecção e Análise Ergonômica</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
@@ -56,7 +56,7 @@
   </style>
 </head>
 <body>
-  <h1>Detecção de Objetos e Análise Ergonômica</h1>
+  <h1>Detecção e Análise Ergonômica</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <div id="metrics">
@@ -91,8 +91,9 @@
     let currentStream;
     let usingFrontCamera = true;
     let isPaused = false;
-    let detectionCount = {};
     let reportData = [];
+    const FOV = 60; // Campo de visão da câmera (em graus)
+    const CAMERA_DISTANCE = 1.5; // Distância estimada da câmera ao objeto (em metros)
 
     async function setupCamera(facingMode = "user") {
       if (currentStream) {
@@ -108,30 +109,17 @@
       poseModel = await posenet.load();
     }
 
+    function convertToRealScale(pixelValue) {
+      const screenWidth = canvas.width;
+      const realScaleFactor = (2 * CAMERA_DISTANCE * Math.tan((FOV / 2) * (Math.PI / 180))) / screenWidth;
+      return (pixelValue * realScaleFactor).toFixed(4); // Retorna em metros
+    }
+
     function logMessage(message) {
       const logItem = document.createElement("li");
       logItem.textContent = message;
       logList.appendChild(logItem);
       logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
-    }
-
-    function renderObjects(objects) {
-      objects.forEach((obj) => {
-        const [x, y, width, height] = obj.bbox;
-
-        detectionCount[obj.class] = (detectionCount[obj.class] || 0) + 1;
-        const count = detectionCount[obj.class];
-
-        ctx.strokeStyle = "blue";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, width, height);
-        ctx.fillStyle = "blue";
-        ctx.font = "16px Arial";
-        ctx.fillText(`${obj.class} (${count}x)`, x, y > 10 ? y - 5 : 10);
-
-        logMessage(`Objeto: ${obj.class} - Detecções: ${count}`);
-        reportData.push({ type: "object", class: obj.class, count, bbox: obj.bbox });
-      });
     }
 
     function renderPose(pose) {
@@ -168,12 +156,16 @@
       const rightShoulder = pose.keypoints[6].position;
       const leftHip = pose.keypoints[11].position;
 
-      const shoulderWidth = Math.sqrt(
-        Math.pow(leftShoulder.x - rightShoulder.x, 2) +
-        Math.pow(leftShoulder.y - rightShoulder.y, 2)
+      const shoulderWidth = convertToRealScale(
+        Math.sqrt(
+          Math.pow(leftShoulder.x - rightShoulder.x, 2) +
+          Math.pow(leftShoulder.y - rightShoulder.y, 2)
+        )
       );
+      const shoulderWidthCm = (shoulderWidth * 100).toFixed(2);
 
-      logMessage(`Largura dos ombros: ${shoulderWidth.toFixed(2)} pixels`);
+      const status = shoulderWidth > 0.35 ? "Dentro dos padrões" : "Fora dos padrões";
+      logMessage(`Largura dos ombros: ${shoulderWidth} m (${shoulderWidthCm} cm) - ${status}`);
     }
 
     async function detectLoop() {
@@ -182,10 +174,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
-      const objects = await cocoModel.detect(videoElement);
-      renderObjects(objects);
-
-      const pose = await poseModel.estimateSinglePose(videoElement);
+      const pose = await poseModel.estimateSinglePose(videoElement, { flipHorizontal: false });
       renderPose(pose);
       checkErgonomicStandards(pose);
 
