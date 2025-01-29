@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detecção e Análise Ergonômica</title>
+  <title>Análise Ergonômica de Veículos e Pessoas</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
@@ -12,46 +12,61 @@
       font-family: Arial, sans-serif;
       text-align: center;
       background: #f4f4f9;
+      margin: 0;
+      padding: 0;
     }
 
     video, canvas {
       width: 90%;
       max-width: 640px;
-      margin: 20px auto;
+      margin: 10px auto;
       border-radius: 10px;
+      display: block;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
 
-    #metrics {
+    #metrics, #logContainer {
       width: 90%;
       max-width: 640px;
       background: #f0f0f0;
       border-radius: 20px;
-      padding: 20px;
-      margin-top: 20px;
-      max-height: 300px;
+      padding: 10px;
+      margin: 10px auto;
+      max-height: 200px;
       overflow-y: auto;
       text-align: left;
     }
 
+    #logContainer {
+      background: #222;
+      color: #0f0;
+      font-family: monospace;
+    }
+
     #controls button {
-      background: #e0e0e0;
+      background: #007bff;
+      color: white;
       border: none;
-      border-radius: 12px;
-      padding: 10px 20px;
-      font-size: 16px;
-      margin: 10px;
+      padding: 10px;
+      font-size: 14px;
+      margin: 5px;
+      border-radius: 8px;
       cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <h1>Detecção e Análise Ergonômica</h1>
+  <h1>Análise Ergonômica de Veículos e Pessoas</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <div id="metrics">
-    <h2>Métricas Ergonômicas e Dimensões</h2>
+    <h2>Métricas</h2>
     <ul id="metricsList"></ul>
+  </div>
+
+  <div id="logContainer">
+    <h2>Log Ergonômico</h2>
+    <ul id="logList"></ul>
   </div>
 
   <div id="controls">
@@ -66,6 +81,7 @@
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     const metricsList = document.getElementById("metricsList");
+    const logList = document.getElementById("logList");
     const switchCameraBtn = document.getElementById("switchCamera");
     const pauseCaptureBtn = document.getElementById("pauseCapture");
     const startVRBtn = document.getElementById("startVR");
@@ -94,69 +110,43 @@
       return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
     }
 
-    function updateMetrics(objects, pose) {
-      metricsList.innerHTML = "";
-
-      objects.forEach((obj) => {
-        const li = document.createElement("li");
-        li.textContent = `Objeto: ${obj.class} | Largura: ${obj.bbox[2].toFixed(2)} px | Altura: ${obj.bbox[3].toFixed(2)} px`;
-        metricsList.appendChild(li);
-      });
-
-      if (pose) {
-        const leftShoulder = pose.keypoints[5].position;
-        const rightShoulder = pose.keypoints[6].position;
-        const leftHip = pose.keypoints[11].position;
-        const rightHip = pose.keypoints[12].position;
-        const leftWrist = pose.keypoints[9].position;
-        
-        const shoulderWidth = calculateDistance(leftShoulder, rightShoulder);
-        const torsoHeight = calculateDistance(leftShoulder, leftHip);
-        const armLength = calculateDistance(leftShoulder, leftWrist);
-
-        metricsList.innerHTML += `
-          <li>Largura dos ombros: ${shoulderWidth.toFixed(2)} px</li>
-          <li>Altura do tronco: ${torsoHeight.toFixed(2)} px</li>
-          <li>Comprimento do braço: ${armLength.toFixed(2)} px</li>
-        `;
-      }
+    function logMessage(message) {
+      const logItem = document.createElement("li");
+      logItem.textContent = message;
+      logList.appendChild(logItem);
+      logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
     }
 
-    function renderObjects(objects) {
-      objects.forEach((obj) => {
-        ctx.strokeStyle = "green";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(...obj.bbox);
-        ctx.fillStyle = "green";
-        ctx.font = "16px Arial";
-        ctx.fillText(obj.class, obj.bbox[0], obj.bbox[1] - 5);
-      });
-    }
+    function checkErgonomicStandards(pose) {
+      const leftShoulder = pose.keypoints[5].position;
+      const rightShoulder = pose.keypoints[6].position;
+      const leftHip = pose.keypoints[11].position;
+      const rightHip = pose.keypoints[12].position;
+      const leftWrist = pose.keypoints[9].position;
 
-    function renderPose(pose) {
-      pose.keypoints.forEach((keypoint) => {
-        if (keypoint.score > 0.5) {
-          ctx.beginPath();
-          ctx.arc(keypoint.position.x, keypoint.position.y, 5, 0, 2 * Math.PI);
-          ctx.fillStyle = "red";
-          ctx.fill();
-        }
-      });
+      const shoulderWidth = calculateDistance(leftShoulder, rightShoulder);
+      const torsoHeight = calculateDistance(leftShoulder, leftHip);
+      const armLength = calculateDistance(leftShoulder, leftWrist);
+
+      logMessage(`Largura dos ombros: ${shoulderWidth.toFixed(2)} px`);
+      logMessage(`Altura do tronco: ${torsoHeight.toFixed(2)} px`);
+      logMessage(`Comprimento do braço: ${armLength.toFixed(2)} px`);
+
+      if (shoulderWidth < 100) logMessage("⚠️ Postura incorreta: ombros muito fechados.");
+      if (torsoHeight < 150) logMessage("⚠️ Postura incorreta: coluna curvada.");
+      if (armLength < 50) logMessage("⚠️ Postura incorreta: braços muito dobrados.");
     }
 
     async function detectLoop() {
       if (isPaused) return;
-      
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
       const objects = await cocoModel.detect(videoElement);
-      renderObjects(objects);
-
       const pose = await poseModel.estimateSinglePose(videoElement);
-      renderPose(pose);
 
-      updateMetrics(objects, pose);
+      checkErgonomicStandards(pose);
 
       requestAnimationFrame(detectLoop);
     }
@@ -166,21 +156,12 @@
       await setupCamera(usingFrontCamera ? "user" : "environment");
     });
 
-    pauseCaptureBtn.addEventListener("click", () => {
-      isPaused = !isPaused;
-      pauseCaptureBtn.textContent = isPaused ? "Retomar Captura" : "Pausar Captura";
-      if (!isPaused) detectLoop();
-    });
-
     startVRBtn.addEventListener("click", async () => {
       alert("Modo VR ativado! (Simulação)");
     });
 
     downloadReportBtn.addEventListener("click", () => {
-      const report = {
-        timestamp: new Date().toISOString(),
-        metrics: metricsList.innerText,
-      };
+      const report = { timestamp: new Date().toISOString(), metrics: metricsList.innerText };
       const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
