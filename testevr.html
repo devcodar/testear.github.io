@@ -3,22 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detecção de Objetos, Poses e VR com Análise Ergonômica</title>
+  <title>Detecção e Análise Ergonômica</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 0;
       text-align: center;
       background: #f4f4f9;
-      color: #333;
-    }
-
-    h1 {
-      margin-top: 20px;
-      font-size: 2rem;
     }
 
     video, canvas {
@@ -29,58 +22,26 @@
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
 
-    #metrics, #logContainer {
+    #metrics {
       width: 90%;
       max-width: 640px;
       background: #f0f0f0;
       border-radius: 20px;
       padding: 20px;
       margin-top: 20px;
+      max-height: 300px;
       overflow-y: auto;
-      max-height: 200px;
-    }
-
-    #logContainer {
-      background: #222;
-      color: #0f0;
-      font-family: monospace;
-    }
-
-    #controls button {
-      background: #e0e0e0;
-      border: none;
-      border-radius: 12px;
-      padding: 10px 20px;
-      font-size: 16px;
-      font-weight: bold;
-      color: #555;
-      margin: 10px;
-      box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
-      cursor: pointer;
-    }
-
-    #controls button:active {
-      box-shadow: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
-      transform: scale(0.95);
+      text-align: left;
     }
   </style>
 </head>
 <body>
-  <h1>Detecção de Objetos, Poses e Análise Ergonômica</h1>
+  <h1>Detecção e Análise Ergonômica</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <div id="metrics">
-    <h2>Métricas em Tempo Real</h2>
+    <h2>Métricas Ergonômicas e Dimensões</h2>
     <ul id="metricsList"></ul>
-  </div>
-  <div id="logContainer">
-    <ul id="logList"></ul>
-  </div>
-  <div id="controls">
-    <button id="switchCamera">Trocar Câmera</button>
-    <button id="pauseCapture">Pausar Captura</button>
-    <button id="startVR">Ativar VR</button>
-    <button id="downloadReport">Baixar Relatório</button>
   </div>
 
   <script>
@@ -88,128 +49,81 @@
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     const metricsList = document.getElementById("metricsList");
-    const logList = document.getElementById("logList");
-    const switchCameraBtn = document.getElementById("switchCamera");
-    const pauseCaptureBtn = document.getElementById("pauseCapture");
-    const startVRBtn = document.getElementById("startVR");
-    const downloadReportBtn = document.getElementById("downloadReport");
 
-    let cocoModel, poseModel, xrSession;
-    let currentStream;
-    let usingFrontCamera = true;
-    let isPaused = false;
-    const detectionResults = [];
-    const objectMetrics = {};
-
-    // Configurações do PoseNet
-    const poseNetConfig = {
-      architecture: 'MobileNetV1',
-      outputStride: 16,
-      inputResolution: { width: 640, height: 480 },
-      scoreThreshold: 0.5,
-    };
-
-    async function setupCamera(facingMode = "user") {
-      if (currentStream) {
-        currentStream.getTracks().forEach((track) => track.stop());
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode },
-      });
+    let cocoModel, poseModel;
+    
+    async function setupCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       videoElement.srcObject = stream;
-      currentStream = stream;
     }
 
     async function loadModels() {
       cocoModel = await cocoSsd.load();
-      poseModel = await posenet.load(poseNetConfig);
-      logMessage("Modelos COCO-SSD e PoseNet carregados!");
+      poseModel = await posenet.load();
     }
 
-    function logMessage(message) {
-      const logItem = document.createElement("li");
-      logItem.textContent = message;
-      logList.appendChild(logItem);
-      logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
+    function calculateDistance(p1, p2) {
+      return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
     }
 
-    function updateMetrics(predictions, type) {
-      predictions.forEach((prediction) => {
-        const className = prediction.class || "Pose";
-        if (!objectMetrics[className]) objectMetrics[className] = { count: 0 };
-        objectMetrics[className].count += 1;
-        logMessage(`${type}: ${className} detectado.`);
+    function updateMetrics(objects, pose) {
+      metricsList.innerHTML = "";
+      
+      // Exibir dimensões dos objetos detectados
+      objects.forEach((obj) => {
+        const li = document.createElement("li");
+        li.textContent = `Objeto: ${obj.class} | Largura: ${obj.bbox[2].toFixed(2)} px | Altura: ${obj.bbox[3].toFixed(2)} px`;
+        metricsList.appendChild(li);
       });
 
-      renderMetrics();
-    }
-
-    function renderMetrics() {
-      metricsList.innerHTML = "";
-      for (const [key, data] of Object.entries(objectMetrics)) {
-        const li = document.createElement("li");
-        li.textContent = `${key}: ${data.count} vezes`;
-        metricsList.appendChild(li);
+      // Calcular e exibir distância entre objetos
+      if (objects.length > 1) {
+        for (let i = 0; i < objects.length - 1; i++) {
+          for (let j = i + 1; j < objects.length; j++) {
+            const center1 = { x: objects[i].bbox[0] + objects[i].bbox[2] / 2, y: objects[i].bbox[1] + objects[i].bbox[3] / 2 };
+            const center2 = { x: objects[j].bbox[0] + objects[j].bbox[2] / 2, y: objects[j].bbox[1] + objects[j].bbox[3] / 2 };
+            const distance = calculateDistance(center1, center2);
+            
+            const li = document.createElement("li");
+            li.textContent = `Distância entre ${objects[i].class} e ${objects[j].class}: ${distance.toFixed(2)} px`;
+            metricsList.appendChild(li);
+          }
+        }
       }
-    }
 
-    function calculateAngle(a, b, c) {
-      const ab = Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2));
-      const bc = Math.sqrt(Math.pow(b.x - c.x, 2) + Math.pow(b.y - c.y, 2));
-      const ac = Math.sqrt(Math.pow(c.x - a.x, 2) + Math.pow(c.y - a.y, 2));
-      return Math.acos((ab * ab + bc * bc - ac * ac) / (2 * ab * bc)) * (180 / Math.PI);
-    }
+      // Exibir métricas antropométricas
+      if (pose) {
+        const leftShoulder = pose.keypoints[5].position;
+        const rightShoulder = pose.keypoints[6].position;
+        const leftHip = pose.keypoints[11].position;
+        const rightHip = pose.keypoints[12].position;
+        
+        const shoulderWidth = calculateDistance(leftShoulder, rightShoulder);
+        const torsoHeight = calculateDistance(leftShoulder, leftHip);
+        const armLength = calculateDistance(leftShoulder, pose.keypoints[9].position);
 
-    function checkErgonomicStandards(pose) {
-      const leftElbowAngle = calculateAngle(
-        pose.keypoints[5].position, // Ombro esquerdo
-        pose.keypoints[7].position, // Cotovelo esquerdo
-        pose.keypoints[9].position  // Pulso esquerdo
-      );
+        const li1 = document.createElement("li");
+        li1.textContent = `Largura dos ombros: ${shoulderWidth.toFixed(2)} px`;
+        metricsList.appendChild(li1);
 
-      const rightElbowAngle = calculateAngle(
-        pose.keypoints[6].position, // Ombro direito
-        pose.keypoints[8].position, // Cotovelo direito
-        pose.keypoints[10].position // Pulso direito
-      );
+        const li2 = document.createElement("li");
+        li2.textContent = `Altura do tronco: ${torsoHeight.toFixed(2)} px`;
+        metricsList.appendChild(li2);
 
-      const spineAngle = calculateAngle(
-        pose.keypoints[11].position, // Quadril esquerdo
-        pose.keypoints[5].position,  // Ombro esquerdo
-        pose.keypoints[6].position   // Ombro direito
-      );
-
-      const ergonomicStatus = {
-        leftElbow: leftElbowAngle >= 90 && leftElbowAngle <= 120,
-        rightElbow: rightElbowAngle >= 90 && rightElbowAngle <= 120,
-        spine: spineAngle >= 170 && spineAngle <= 190, // Coluna ereta
-      };
-
-      return ergonomicStatus;
-    }
-
-    function renderErgonomicFeedback(ergonomicStatus) {
-      if (!ergonomicStatus.leftElbow) {
-        logMessage("Atenção: Ângulo do cotovelo esquerdo fora do padrão ergonômico!");
-      }
-      if (!ergonomicStatus.rightElbow) {
-        logMessage("Atenção: Ângulo do cotovelo direito fora do padrão ergonômico!");
-      }
-      if (!ergonomicStatus.spine) {
-        logMessage("Atenção: Postura da coluna fora do padrão ergonômico!");
+        const li3 = document.createElement("li");
+        li3.textContent = `Comprimento do braço: ${armLength.toFixed(2)} px`;
+        metricsList.appendChild(li3);
       }
     }
 
     function renderObjects(objects) {
       objects.forEach((obj) => {
-        const [x, y, width, height] = obj.bbox;
         ctx.strokeStyle = "green";
         ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, width, height);
-
+        ctx.strokeRect(...obj.bbox);
         ctx.fillStyle = "green";
         ctx.font = "16px Arial";
-        ctx.fillText(`${obj.class} (${(obj.score * 100).toFixed(1)}%)`, x, y > 10 ? y - 5 : 10);
+        ctx.fillText(obj.class, obj.bbox[0], obj.bbox[1] > 10 ? obj.bbox[1] - 5 : 10);
       });
     }
 
@@ -235,58 +149,18 @@
     }
 
     async function detectLoop() {
-      if (isPaused) return;
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
       const objects = await cocoModel.detect(videoElement);
       renderObjects(objects);
-      updateMetrics(objects, "Objeto");
 
-      const pose = await poseModel.estimateSinglePose(videoElement, poseNetConfig);
+      const pose = await poseModel.estimateSinglePose(videoElement);
       renderPose(pose);
-      updateMetrics([pose], "Pose");
 
-      const ergonomicStatus = checkErgonomicStandards(pose);
-      renderErgonomicFeedback(ergonomicStatus);
-
+      updateMetrics(objects, pose);
       requestAnimationFrame(detectLoop);
     }
-
-    switchCameraBtn.addEventListener("click", async () => {
-      usingFrontCamera = !usingFrontCamera;
-      await setupCamera(usingFrontCamera ? "user" : "environment");
-    });
-
-    pauseCaptureBtn.addEventListener("click", () => {
-      isPaused = !isPaused;
-      pauseCaptureBtn.textContent = isPaused ? "Retomar Captura" : "Pausar Captura";
-      if (!isPaused) detectLoop();
-    });
-
-    startVRBtn.addEventListener("click", async () => {
-      if (navigator.xr) {
-        xrSession = await navigator.xr.requestSession("immersive-vr");
-        document.body.style.display = "none";
-        alert("Modo VR Ativado!");
-      } else {
-        alert("Dispositivo não suporta VR.");
-      }
-    });
-
-    downloadReportBtn.addEventListener("click", () => {
-      const report = {
-        objectMetrics,
-        ergonomicStatus: checkErgonomicStandards(pose),
-        timestamp: new Date().toISOString(),
-      };
-      const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "ergonomic_report.json";
-      link.click();
-    });
 
     async function init() {
       canvas.width = 640;
