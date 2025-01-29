@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Detecção e Análise Ergonômica</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
   <style>
     body {
@@ -72,8 +71,6 @@
   <div id="controls">
     <button id="switchCamera">Trocar Câmera</button>
     <button id="pauseCapture">Pausar Captura</button>
-    <button id="startVR">Ativar VR</button>
-    <button id="downloadReport">Baixar Relatório</button>
   </div>
 
   <script>
@@ -83,16 +80,12 @@
     const metricsList = document.getElementById("metricsList");
     const logList = document.getElementById("logList");
     const switchCameraBtn = document.getElementById("switchCamera");
-    const pauseCaptureBtn = document.getElementById("pauseCapture");
-    const startVRBtn = document.getElementById("startVR");
-    const downloadReportBtn = document.getElementById("downloadReport");
-
-    let cocoModel, poseModel;
     let currentStream;
     let usingFrontCamera = true;
-    let isPaused = false;
-    const detectionCount = {};
+    let poseModel;
+
     const FOV = 60; // Campo de visão da câmera para conversão em escala real
+    const CAMERA_DISTANCE = 1.5; // Distância estimada da câmera ao objeto em metros
 
     async function setupCamera(facingMode = "user") {
       if (currentStream) {
@@ -104,7 +97,6 @@
     }
 
     async function loadModels() {
-      cocoModel = await cocoSsd.load();
       poseModel = await posenet.load();
     }
 
@@ -114,15 +106,8 @@
 
     function convertToRealScale(pixelValue) {
       const screenWidth = canvas.width;
-      const estimatedDistance = 1.5; // Distância média da câmera (em metros)
-      const realScaleFactor = (2 * estimatedDistance * Math.tan((FOV / 2) * (Math.PI / 180))) / screenWidth;
-      return (pixelValue * realScaleFactor * 100).toFixed(2); // Retorna em cm
-    }
-
-    function calculateAreaInCm2(width, height) {
-      const realWidth = convertToRealScale(width);
-      const realHeight = convertToRealScale(height);
-      return (realWidth * realHeight).toFixed(2); // Retorna em cm²
+      const realScaleFactor = (2 * CAMERA_DISTANCE * Math.tan((FOV / 2) * (Math.PI / 180))) / screenWidth;
+      return (pixelValue * realScaleFactor).toFixed(4); // Retorna em metros
     }
 
     function logMessage(message) {
@@ -132,28 +117,19 @@
       logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
     }
 
-    function renderObjects(objects) {
-      objects.forEach((obj) => {
-        const [x, y, width, height] = obj.bbox;
-        const areaInCm2 = calculateAreaInCm2(width, height);
+    function renderPose(pose) {
+      pose.keypoints.forEach((keypoint) => {
+        if (keypoint.score > 0.5) {
+          ctx.beginPath();
+          ctx.arc(keypoint.position.x, keypoint.position.y, 5, 0, 2 * Math.PI);
+          ctx.fillStyle = "red";
+          ctx.fill();
 
-        detectionCount[obj.class] = (detectionCount[obj.class] || 0) + 1;
-
-        ctx.strokeStyle = "blue";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, width, height);
-        ctx.fillStyle = "blue";
-        ctx.font = "16px Arial";
-        ctx.fillText(
-          `${obj.class} (${(obj.score * 100).toFixed(1)}%)`,
-          x,
-          y > 10 ? y - 5 : 10
-        );
-        ctx.fillText(`Área: ${areaInCm2} cm²`, x, y + 15);
-
-        logMessage(
-          `${obj.class} detectado (${detectionCount[obj.class]}x). Área: ${areaInCm2} cm²`
-        );
+          // Exibe os keypoints
+          ctx.fillStyle = "yellow";
+          ctx.font = "10px Arial";
+          ctx.fillText(keypoint.part, keypoint.position.x + 5, keypoint.position.y + 5);
+        }
       });
     }
 
@@ -163,28 +139,28 @@
       const leftHip = pose.keypoints[11].position;
       const leftWrist = pose.keypoints[9].position;
 
-      const shoulderWidth = convertToRealScale(calculateDistance(leftShoulder, rightShoulder));
-      const torsoHeight = convertToRealScale(calculateDistance(leftShoulder, leftHip));
-      const armLength = convertToRealScale(calculateDistance(leftShoulder, leftWrist));
+      // Calcula distâncias em metros
+      const shoulderWidthMeters = convertToRealScale(calculateDistance(leftShoulder, rightShoulder));
+      const torsoHeightMeters = convertToRealScale(calculateDistance(leftShoulder, leftHip));
+      const armLengthMeters = convertToRealScale(calculateDistance(leftShoulder, leftWrist));
 
-      const shoulderArea = calculateAreaInCm2(shoulderWidth, 5); // Considerando 5cm de espessura média
-      const torsoArea = calculateAreaInCm2(torsoHeight, 20); // Considerando 20cm de largura média
+      // Converte para centímetros
+      const shoulderWidthCm = (shoulderWidthMeters * 100).toFixed(2);
+      const torsoHeightCm = (torsoHeightMeters * 100).toFixed(2);
+      const armLengthCm = (armLengthMeters * 100).toFixed(2);
 
-      logMessage(`Largura dos ombros: ${shoulderWidth} cm - Área: ${shoulderArea} cm²`);
-      logMessage(`Altura do tronco: ${torsoHeight} cm - Área: ${torsoArea} cm²`);
-      logMessage(`Comprimento do braço: ${armLength} cm`);
+      // Exibe no log
+      logMessage(`Largura dos ombros: ${shoulderWidthMeters} m (${shoulderWidthCm} cm)`);
+      logMessage(`Altura do tronco: ${torsoHeightMeters} m (${torsoHeightCm} cm)`);
+      logMessage(`Comprimento do braço: ${armLengthMeters} m (${armLengthCm} cm)`);
     }
 
     async function detectLoop() {
-      if (isPaused) return;
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
-      const objects = await cocoModel.detect(videoElement);
-      renderObjects(objects);
-
-      const pose = await poseModel.estimateSinglePose(videoElement);
+      const pose = await poseModel.estimateSinglePose(videoElement, { flipHorizontal: false });
+      renderPose(pose);
       checkErgonomicStandards(pose);
 
       requestAnimationFrame(detectLoop);
@@ -193,25 +169,6 @@
     switchCameraBtn.addEventListener("click", async () => {
       usingFrontCamera = !usingFrontCamera;
       await setupCamera(usingFrontCamera ? "user" : "environment");
-    });
-
-    pauseCaptureBtn.addEventListener("click", () => {
-      isPaused = !isPaused;
-      pauseCaptureBtn.textContent = isPaused ? "Retomar Captura" : "Pausar Captura";
-      if (!isPaused) detectLoop();
-    });
-
-    startVRBtn.addEventListener("click", async () => {
-      alert("Modo VR ativado! (Simulação)");
-    });
-
-    downloadReportBtn.addEventListener("click", () => {
-      const report = { timestamp: new Date().toISOString(), metrics: metricsList.innerText };
-      const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "ergonomic_report.json";
-      link.click();
     });
 
     async function init() {
