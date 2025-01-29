@@ -91,6 +91,8 @@
     let currentStream;
     let usingFrontCamera = true;
     let isPaused = false;
+    const detectionCount = {};
+    const FOV = 60; // Campo de visão da câmera para conversão em escala real
 
     async function setupCamera(facingMode = "user") {
       if (currentStream) {
@@ -110,6 +112,19 @@
       return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
     }
 
+    function convertToRealScale(pixelValue) {
+      const screenWidth = canvas.width;
+      const estimatedDistance = 1.5; // Distância média da câmera (em metros)
+      const realScaleFactor = (2 * estimatedDistance * Math.tan((FOV / 2) * (Math.PI / 180))) / screenWidth;
+      return (pixelValue * realScaleFactor * 100).toFixed(2); // Retorna em cm
+    }
+
+    function calculateAreaInCm2(width, height) {
+      const realWidth = convertToRealScale(width);
+      const realHeight = convertToRealScale(height);
+      return (realWidth * realHeight).toFixed(2); // Retorna em cm²
+    }
+
     function logMessage(message) {
       const logItem = document.createElement("li");
       logItem.textContent = message;
@@ -120,23 +135,25 @@
     function renderObjects(objects) {
       objects.forEach((obj) => {
         const [x, y, width, height] = obj.bbox;
+        const areaInCm2 = calculateAreaInCm2(width, height);
+
+        detectionCount[obj.class] = (detectionCount[obj.class] || 0) + 1;
+
         ctx.strokeStyle = "blue";
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, width, height);
         ctx.fillStyle = "blue";
         ctx.font = "16px Arial";
-        ctx.fillText(`${obj.class} (${(obj.score * 100).toFixed(1)}%)`, x, y > 10 ? y - 5 : 10);
-      });
-    }
+        ctx.fillText(
+          `${obj.class} (${(obj.score * 100).toFixed(1)}%)`,
+          x,
+          y > 10 ? y - 5 : 10
+        );
+        ctx.fillText(`Área: ${areaInCm2} cm²`, x, y + 15);
 
-    function renderPose(pose) {
-      pose.keypoints.forEach((keypoint) => {
-        if (keypoint.score > 0.5) {
-          ctx.beginPath();
-          ctx.arc(keypoint.position.x, keypoint.position.y, 5, 0, 2 * Math.PI);
-          ctx.fillStyle = "red";
-          ctx.fill();
-        }
+        logMessage(
+          `${obj.class} detectado (${detectionCount[obj.class]}x). Área: ${areaInCm2} cm²`
+        );
       });
     }
 
@@ -146,17 +163,16 @@
       const leftHip = pose.keypoints[11].position;
       const leftWrist = pose.keypoints[9].position;
 
-      const shoulderWidth = calculateDistance(leftShoulder, rightShoulder);
-      const torsoHeight = calculateDistance(leftShoulder, leftHip);
-      const armLength = calculateDistance(leftShoulder, leftWrist);
+      const shoulderWidth = convertToRealScale(calculateDistance(leftShoulder, rightShoulder));
+      const torsoHeight = convertToRealScale(calculateDistance(leftShoulder, leftHip));
+      const armLength = convertToRealScale(calculateDistance(leftShoulder, leftWrist));
 
-      const shoulderStatus = shoulderWidth > 100 ? "Dentro dos padrões" : "Fora dos padrões";
-      const torsoStatus = torsoHeight > 150 ? "Dentro dos padrões" : "Fora dos padrões";
-      const armStatus = armLength > 50 ? "Dentro dos padrões" : "Fora dos padrões";
+      const shoulderArea = calculateAreaInCm2(shoulderWidth, 5); // Considerando 5cm de espessura média
+      const torsoArea = calculateAreaInCm2(torsoHeight, 20); // Considerando 20cm de largura média
 
-      logMessage(`Largura dos ombros: ${shoulderWidth.toFixed(2)} px - ${shoulderStatus}`);
-      logMessage(`Altura do tronco: ${torsoHeight.toFixed(2)} px - ${torsoStatus}`);
-      logMessage(`Comprimento do braço: ${armLength.toFixed(2)} px - ${armStatus}`);
+      logMessage(`Largura dos ombros: ${shoulderWidth} cm - Área: ${shoulderArea} cm²`);
+      logMessage(`Altura do tronco: ${torsoHeight} cm - Área: ${torsoArea} cm²`);
+      logMessage(`Comprimento do braço: ${armLength} cm`);
     }
 
     async function detectLoop() {
@@ -169,8 +185,6 @@
       renderObjects(objects);
 
       const pose = await poseModel.estimateSinglePose(videoElement);
-      renderPose(pose);
-
       checkErgonomicStandards(pose);
 
       requestAnimationFrame(detectLoop);
