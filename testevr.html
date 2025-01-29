@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Análise Ergonômica de Veículos e Pessoas</title>
+  <title>Análise Ergonômica e Mapa de Calor</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
@@ -56,7 +56,7 @@
   </style>
 </head>
 <body>
-  <h1>Análise Ergonômica de Veículos e Pessoas</h1>
+  <h1>Análise Ergonômica e Mapa de Calor</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <div id="metrics">
@@ -91,6 +91,7 @@
     let currentStream;
     let usingFrontCamera = true;
     let isPaused = false;
+    const FOV = 60; // Campo de visão da câmera para conversão em escala real
 
     async function setupCamera(facingMode = "user") {
       if (currentStream) {
@@ -110,6 +111,13 @@
       return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
     }
 
+    function convertToRealScale(pixelValue) {
+      const screenWidth = canvas.width;
+      const estimatedDistance = 1.5; // Distância média da câmera para o corpo (1.5m)
+      const realScaleFactor = (2 * estimatedDistance * Math.tan((FOV / 2) * (Math.PI / 180))) / screenWidth;
+      return (pixelValue * realScaleFactor).toFixed(2); // Retorna em metros
+    }
+
     function logMessage(message) {
       const logItem = document.createElement("li");
       logItem.textContent = message;
@@ -117,24 +125,34 @@
       logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
     }
 
+    function renderHeatMap(pose) {
+      pose.keypoints.forEach((keypoint) => {
+        if (keypoint.score > 0.5) {
+          ctx.beginPath();
+          ctx.arc(keypoint.position.x, keypoint.position.y, 10, 0, 2 * Math.PI);
+          ctx.fillStyle = "rgba(255, 0, 0, 0.6)";
+          ctx.fill();
+        }
+      });
+    }
+
     function checkErgonomicStandards(pose) {
       const leftShoulder = pose.keypoints[5].position;
       const rightShoulder = pose.keypoints[6].position;
       const leftHip = pose.keypoints[11].position;
-      const rightHip = pose.keypoints[12].position;
       const leftWrist = pose.keypoints[9].position;
 
-      const shoulderWidth = calculateDistance(leftShoulder, rightShoulder);
-      const torsoHeight = calculateDistance(leftShoulder, leftHip);
-      const armLength = calculateDistance(leftShoulder, leftWrist);
+      const shoulderWidth = convertToRealScale(calculateDistance(leftShoulder, rightShoulder));
+      const torsoHeight = convertToRealScale(calculateDistance(leftShoulder, leftHip));
+      const armLength = convertToRealScale(calculateDistance(leftShoulder, leftWrist));
 
-      logMessage(`Largura dos ombros: ${shoulderWidth.toFixed(2)} px`);
-      logMessage(`Altura do tronco: ${torsoHeight.toFixed(2)} px`);
-      logMessage(`Comprimento do braço: ${armLength.toFixed(2)} px`);
+      logMessage(`Largura dos ombros: ${shoulderWidth} m`);
+      logMessage(`Altura do tronco: ${torsoHeight} m`);
+      logMessage(`Comprimento do braço: ${armLength} m`);
 
-      if (shoulderWidth < 100) logMessage("⚠️ Postura incorreta: ombros muito fechados.");
-      if (torsoHeight < 150) logMessage("⚠️ Postura incorreta: coluna curvada.");
-      if (armLength < 50) logMessage("⚠️ Postura incorreta: braços muito dobrados.");
+      if (shoulderWidth < 0.35) logMessage("⚠️ Postura incorreta: ombros muito fechados.");
+      if (torsoHeight < 0.50) logMessage("⚠️ Postura incorreta: coluna curvada.");
+      if (armLength < 0.25) logMessage("⚠️ Postura incorreta: braços muito dobrados.");
     }
 
     async function detectLoop() {
@@ -147,27 +165,10 @@
       const pose = await poseModel.estimateSinglePose(videoElement);
 
       checkErgonomicStandards(pose);
+      renderHeatMap(pose);
 
       requestAnimationFrame(detectLoop);
     }
-
-    switchCameraBtn.addEventListener("click", async () => {
-      usingFrontCamera = !usingFrontCamera;
-      await setupCamera(usingFrontCamera ? "user" : "environment");
-    });
-
-    startVRBtn.addEventListener("click", async () => {
-      alert("Modo VR ativado! (Simulação)");
-    });
-
-    downloadReportBtn.addEventListener("click", () => {
-      const report = { timestamp: new Date().toISOString(), metrics: metricsList.innerText };
-      const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "ergonomic_report.json";
-      link.click();
-    });
 
     async function init() {
       canvas.width = 640;
