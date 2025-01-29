@@ -33,6 +33,16 @@
       overflow-y: auto;
       text-align: left;
     }
+
+    #controls button {
+      background: #e0e0e0;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -44,17 +54,35 @@
     <ul id="metricsList"></ul>
   </div>
 
+  <div id="controls">
+    <button id="switchCamera">Trocar Câmera</button>
+    <button id="pauseCapture">Pausar Captura</button>
+    <button id="startVR">Ativar VR</button>
+    <button id="downloadReport">Baixar Relatório</button>
+  </div>
+
   <script>
     const videoElement = document.getElementById("videoElement");
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     const metricsList = document.getElementById("metricsList");
+    const switchCameraBtn = document.getElementById("switchCamera");
+    const pauseCaptureBtn = document.getElementById("pauseCapture");
+    const startVRBtn = document.getElementById("startVR");
+    const downloadReportBtn = document.getElementById("downloadReport");
 
     let cocoModel, poseModel;
-    
-    async function setupCamera() {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    let currentStream;
+    let usingFrontCamera = true;
+    let isPaused = false;
+
+    async function setupCamera(facingMode = "user") {
+      if (currentStream) {
+        currentStream.getTracks().forEach((track) => track.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
       videoElement.srcObject = stream;
+      currentStream = stream;
     }
 
     async function loadModels() {
@@ -68,51 +96,29 @@
 
     function updateMetrics(objects, pose) {
       metricsList.innerHTML = "";
-      
-      // Exibir dimensões dos objetos detectados
+
       objects.forEach((obj) => {
         const li = document.createElement("li");
         li.textContent = `Objeto: ${obj.class} | Largura: ${obj.bbox[2].toFixed(2)} px | Altura: ${obj.bbox[3].toFixed(2)} px`;
         metricsList.appendChild(li);
       });
 
-      // Calcular e exibir distância entre objetos
-      if (objects.length > 1) {
-        for (let i = 0; i < objects.length - 1; i++) {
-          for (let j = i + 1; j < objects.length; j++) {
-            const center1 = { x: objects[i].bbox[0] + objects[i].bbox[2] / 2, y: objects[i].bbox[1] + objects[i].bbox[3] / 2 };
-            const center2 = { x: objects[j].bbox[0] + objects[j].bbox[2] / 2, y: objects[j].bbox[1] + objects[j].bbox[3] / 2 };
-            const distance = calculateDistance(center1, center2);
-            
-            const li = document.createElement("li");
-            li.textContent = `Distância entre ${objects[i].class} e ${objects[j].class}: ${distance.toFixed(2)} px`;
-            metricsList.appendChild(li);
-          }
-        }
-      }
-
-      // Exibir métricas antropométricas
       if (pose) {
         const leftShoulder = pose.keypoints[5].position;
         const rightShoulder = pose.keypoints[6].position;
         const leftHip = pose.keypoints[11].position;
         const rightHip = pose.keypoints[12].position;
+        const leftWrist = pose.keypoints[9].position;
         
         const shoulderWidth = calculateDistance(leftShoulder, rightShoulder);
         const torsoHeight = calculateDistance(leftShoulder, leftHip);
-        const armLength = calculateDistance(leftShoulder, pose.keypoints[9].position);
+        const armLength = calculateDistance(leftShoulder, leftWrist);
 
-        const li1 = document.createElement("li");
-        li1.textContent = `Largura dos ombros: ${shoulderWidth.toFixed(2)} px`;
-        metricsList.appendChild(li1);
-
-        const li2 = document.createElement("li");
-        li2.textContent = `Altura do tronco: ${torsoHeight.toFixed(2)} px`;
-        metricsList.appendChild(li2);
-
-        const li3 = document.createElement("li");
-        li3.textContent = `Comprimento do braço: ${armLength.toFixed(2)} px`;
-        metricsList.appendChild(li3);
+        metricsList.innerHTML += `
+          <li>Largura dos ombros: ${shoulderWidth.toFixed(2)} px</li>
+          <li>Altura do tronco: ${torsoHeight.toFixed(2)} px</li>
+          <li>Comprimento do braço: ${armLength.toFixed(2)} px</li>
+        `;
       }
     }
 
@@ -123,7 +129,7 @@
         ctx.strokeRect(...obj.bbox);
         ctx.fillStyle = "green";
         ctx.font = "16px Arial";
-        ctx.fillText(obj.class, obj.bbox[0], obj.bbox[1] > 10 ? obj.bbox[1] - 5 : 10);
+        ctx.fillText(obj.class, obj.bbox[0], obj.bbox[1] - 5);
       });
     }
 
@@ -136,19 +142,11 @@
           ctx.fill();
         }
       });
-
-      const adjacentKeyPoints = posenet.getAdjacentKeyPoints(pose.keypoints, 0.5);
-      adjacentKeyPoints.forEach(([from, to]) => {
-        ctx.beginPath();
-        ctx.moveTo(from.position.x, from.position.y);
-        ctx.lineTo(to.position.x, to.position.y);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "blue";
-        ctx.stroke();
-      });
     }
 
     async function detectLoop() {
+      if (isPaused) return;
+      
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
@@ -159,8 +157,36 @@
       renderPose(pose);
 
       updateMetrics(objects, pose);
+
       requestAnimationFrame(detectLoop);
     }
+
+    switchCameraBtn.addEventListener("click", async () => {
+      usingFrontCamera = !usingFrontCamera;
+      await setupCamera(usingFrontCamera ? "user" : "environment");
+    });
+
+    pauseCaptureBtn.addEventListener("click", () => {
+      isPaused = !isPaused;
+      pauseCaptureBtn.textContent = isPaused ? "Retomar Captura" : "Pausar Captura";
+      if (!isPaused) detectLoop();
+    });
+
+    startVRBtn.addEventListener("click", async () => {
+      alert("Modo VR ativado! (Simulação)");
+    });
+
+    downloadReportBtn.addEventListener("click", () => {
+      const report = {
+        timestamp: new Date().toISOString(),
+        metrics: metricsList.innerText,
+      };
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "ergonomic_report.json";
+      link.click();
+    });
 
     async function init() {
       canvas.width = 640;
