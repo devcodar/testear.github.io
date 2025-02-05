@@ -3,48 +3,109 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detecção de Objetos e Análise Ergonômica</title>
+  <title>Otimização de Occupant Packaging</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
   <style>
     body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f4f4f9;
       margin: 0;
       padding: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      background: #000;
     }
 
     video, canvas {
-      width: 100%;
-      height: auto;
+      width: 90%;
+      max-width: 640px;
+      margin: 10px auto;
+      border-radius: 10px;
       display: block;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    #metrics, #logContainer {
+      width: 90%;
+      max-width: 640px;
+      background: #f0f0f0;
+      border-radius: 20px;
+      padding: 10px;
+      margin: 10px auto;
+      max-height: 200px;
+      overflow-y: auto;
+      text-align: left;
+    }
+
+    #logContainer {
+      background: #222;
+      color: #0f0;
+      font-family: monospace;
+    }
+
+    #controls button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px;
+      font-size: 14px;
+      margin: 5px;
+      border-radius: 8px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
+  <h1>Otimização de Occupant Packaging</h1>
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
+  <div id="metrics">
+    <h2>Métricas de Occupant Packaging</h2>
+    <ul id="metricsList"></ul>
+  </div>
+
+  <div id="logContainer">
+    <h2>Log</h2>
+    <ul id="logList"></ul>
+  </div>
+
+  <div id="controls">
+    <button id="switchCamera">Trocar Câmera</button>
+    <button id="pauseCapture">Pausar Captura</button>
+    <button id="downloadReport">Baixar Relatório</button>
+  </div>
 
   <script>
     const videoElement = document.getElementById("videoElement");
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
+    const metricsList = document.getElementById("metricsList");
+    const logList = document.getElementById("logList");
+    const switchCameraBtn = document.getElementById("switchCamera");
+    const pauseCaptureBtn = document.getElementById("pauseCapture");
+    const downloadReportBtn = document.getElementById("downloadReport");
 
     let cocoModel, poseModel;
     let currentStream;
-
+    let usingFrontCamera = true;
+    let isPaused = false;
+    let detectionCount = {};
+    let reportData = [];
     const FOV = 60; // Campo de visão da câmera em graus
     const CAMERA_DISTANCE = 1.5; // Distância estimada da câmera ao objeto (em metros)
 
-    async function setupCamera() {
+    // Dados de design do veículo (exemplo)
+    const vehicleDesign = {
+      roofHeight: 1.6, // Altura do teto em metros
+      steeringWheelDistance: 0.7, // Distância do volante ao banco em metros
+      seatAdjustmentRange: { x: 0.2, z: 0.1 }, // Faixa de ajuste do banco (em metros)
+    };
+
+    async function setupCamera(facingMode = "user") {
       if (currentStream) {
         currentStream.getTracks().forEach((track) => track.stop());
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
       videoElement.srcObject = stream;
       currentStream = stream;
     }
@@ -64,55 +125,113 @@
       return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
     }
 
-    function renderObjects(objects) {
-      const positions = [];
+    function logMessage(message) {
+      const logItem = document.createElement("li");
+      logItem.textContent = message;
+      logList.appendChild(logItem);
+      logList.parentElement.scrollTop = logList.parentElement.scrollHeight;
+    }
 
+    function renderObjects(objects) {
       objects.forEach((obj) => {
         const [x, y, width, height] = obj.bbox;
+
+        detectionCount[obj.class] = (detectionCount[obj.class] || 0) + 1;
+        const count = detectionCount[obj.class];
 
         ctx.strokeStyle = "blue";
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, width, height);
         ctx.fillStyle = "blue";
         ctx.font = "16px Arial";
-        ctx.fillText(`${obj.class} (${(obj.score * 100).toFixed(1)}%)`, x, y > 10 ? y - 5 : 10);
+        ctx.fillText(`${obj.class} (${count}x)`, x, y > 10 ? y - 5 : 10);
 
-        // Salva a posição do objeto para cálculos de distância
-        positions.push({ x: x + width / 2, y: y + height / 2, class: obj.class });
-
-        const realWidth = convertToRealScale(width);
-        const realHeight = convertToRealScale(height);
-        const areaMeters = (realWidth * realHeight).toFixed(4);
-
-        console.log(`Objeto: ${obj.class}, Área: ${areaMeters} m², Posição: (${x.toFixed(1)}, ${y.toFixed(1)})`);
+        const areaMeters = (convertToRealScale(width) * convertToRealScale(height)).toFixed(4);
+        logMessage(`Objeto: ${obj.class} - Área: ${areaMeters} m² - Detecções: ${count}`);
+        reportData.push({ type: "object", class: obj.class, count, areaMeters });
       });
+    }
 
-      // Calcula a distância entre objetos
-      if (positions.length > 1) {
-        for (let i = 0; i < positions.length - 1; i++) {
-          const distance = convertToRealScale(
-            calculateDistance(positions[i], positions[i + 1])
-          );
-          console.log(
-            `Distância entre ${positions[i].class} e ${positions[i + 1].class}: ${distance} m`
-          );
+    function renderPose(pose) {
+      pose.keypoints.forEach((keypoint) => {
+        if (keypoint.score > 0.5) {
+          ctx.beginPath();
+          ctx.arc(keypoint.position.x, keypoint.position.y, 5, 0, 2 * Math.PI);
+          ctx.fillStyle = "red";
+          ctx.fill();
+
+          const position = `(${keypoint.position.x.toFixed(1)}, ${keypoint.position.y.toFixed(1)})`;
+          ctx.fillStyle = "yellow";
+          ctx.font = "10px Arial";
+          ctx.fillText(`${keypoint.part}: ${position}`, keypoint.position.x + 5, keypoint.position.y + 5);
+
+          logMessage(`Keypoint: ${keypoint.part} - Posição: ${position}`);
+          reportData.push({ type: "keypoint", part: keypoint.part, position: keypoint.position });
         }
-      }
+      });
+    }
+
+    function checkErgonomicStandards(pose) {
+      const leftShoulder = pose.keypoints[5].position;
+      const rightShoulder = pose.keypoints[6].position;
+      const leftEye = pose.keypoints[1].position;
+      const rightEye = pose.keypoints[2].position;
+
+      // Largura dos ombros
+      const shoulderWidth = convertToRealScale(calculateDistance(leftShoulder, rightShoulder));
+      const shoulderWidthCm = (shoulderWidth * 100).toFixed(2);
+      const shoulderStatus = shoulderWidth > 0.35 ? "Dentro dos padrões" : "Fora dos padrões";
+      logMessage(`Largura dos ombros: ${shoulderWidth} m (${shoulderWidthCm} cm) - ${shoulderStatus}`);
+
+      // Altura dos olhos
+      const eyeHeight = convertToRealScale((leftEye.y + rightEye.y) / 2);
+      const eyeHeightStatus = eyeHeight < vehicleDesign.roofHeight ? "Dentro dos padrões" : "Fora dos padrões";
+      logMessage(`Altura dos olhos: ${eyeHeight} m - ${eyeHeightStatus}`);
+
+      // Distância do volante
+      const steeringWheelDistance = convertToRealScale(calculateDistance(leftShoulder, { x: canvas.width / 2, y: canvas.height / 2 }));
+      const steeringWheelStatus = steeringWheelDistance < vehicleDesign.steeringWheelDistance ? "Dentro dos padrões" : "Fora dos padrões";
+      logMessage(`Distância do volante: ${steeringWheelDistance} m - ${steeringWheelStatus}`);
     }
 
     async function detectLoop() {
+      if (isPaused) return;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
       const objects = await cocoModel.detect(videoElement);
       renderObjects(objects);
 
+      const pose = await poseModel.estimateSinglePose(videoElement);
+      renderPose(pose);
+      checkErgonomicStandards(pose);
+
       requestAnimationFrame(detectLoop);
     }
 
+    switchCameraBtn.addEventListener("click", async () => {
+      usingFrontCamera = !usingFrontCamera;
+      await setupCamera(usingFrontCamera ? "user" : "environment");
+    });
+
+    pauseCaptureBtn.addEventListener("click", () => {
+      isPaused = !isPaused;
+      pauseCaptureBtn.textContent = isPaused ? "Retomar Captura" : "Pausar Captura";
+      if (!isPaused) detectLoop();
+    });
+
+    downloadReportBtn.addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "report.json";
+      link.click();
+    });
+
     async function init() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      canvas.width = 640;
+      canvas.height = 480;
 
       await setupCamera();
       await loadModels();
