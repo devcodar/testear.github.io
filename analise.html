@@ -7,6 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -53,6 +54,12 @@
       border-radius: 8px;
       cursor: pointer;
     }
+
+    #chartContainer {
+      width: 90%;
+      max-width: 640px;
+      margin: 20px auto;
+    }
   </style>
 </head>
 <body>
@@ -67,6 +74,10 @@
   <div id="logContainer">
     <h2>Log</h2>
     <ul id="logList"></ul>
+  </div>
+
+  <div id="chartContainer">
+    <canvas id="metricsChart"></canvas>
   </div>
 
   <div id="controls">
@@ -84,6 +95,7 @@
     const switchCameraBtn = document.getElementById("switchCamera");
     const pauseCaptureBtn = document.getElementById("pauseCapture");
     const downloadReportBtn = document.getElementById("downloadReport");
+    const metricsChartCtx = document.getElementById("metricsChart").getContext("2d");
 
     let cocoModel, poseModel;
     let currentStream;
@@ -94,12 +106,32 @@
     const FOV = 60; // Campo de visão da câmera em graus
     const CAMERA_DISTANCE = 1.5; // Distância estimada da câmera ao objeto (em metros)
 
-    // Dados de design do veículo (exemplo)
-    const vehicleDesign = {
-      roofHeight: 1.6, // Altura do teto em metros
-      steeringWheelDistance: 0.7, // Distância do volante ao banco em metros
-      seatAdjustmentRange: { x: 0.2, z: 0.1 }, // Faixa de ajuste do banco (em metros)
+    // Base de dados de veículos (exemplo)
+    const vehicleDatabase = {
+      "SUV": { roofHeight: 1.6, steeringWheelDistance: 0.7, seatAdjustmentRange: { x: 0.2, z: 0.1 } },
+      "Sedan": { roofHeight: 1.4, steeringWheelDistance: 0.65, seatAdjustmentRange: { x: 0.15, z: 0.08 } },
+      "Truck": { roofHeight: 1.8, steeringWheelDistance: 0.75, seatAdjustmentRange: { x: 0.25, z: 0.12 } }
     };
+
+    let currentVehicle = "SUV"; // Veículo selecionado
+
+    // Gráfico de métricas
+    const metricsChart = new Chart(metricsChartCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Altura do Olho', 'Distância do Volante', 'Largura dos Ombros'],
+        datasets: [{
+          label: 'Métricas (m)',
+          data: [0, 0, 0],
+          backgroundColor: ['#007bff', '#28a745', '#dc3545']
+        }]
+      },
+      options: {
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
 
     async function setupCamera(facingMode = "user") {
       if (currentStream) {
@@ -185,13 +217,17 @@
 
       // Altura dos olhos
       const eyeHeight = convertToRealScale((leftEye.y + rightEye.y) / 2);
-      const eyeHeightStatus = eyeHeight < vehicleDesign.roofHeight ? "Dentro dos padrões" : "Fora dos padrões";
+      const eyeHeightStatus = eyeHeight < vehicleDatabase[currentVehicle].roofHeight ? "Dentro dos padrões" : "Fora dos padrões";
       logMessage(`Altura dos olhos: ${eyeHeight} m - ${eyeHeightStatus}`);
 
       // Distância do volante
       const steeringWheelDistance = convertToRealScale(calculateDistance(leftShoulder, { x: canvas.width / 2, y: canvas.height / 2 }));
-      const steeringWheelStatus = steeringWheelDistance < vehicleDesign.steeringWheelDistance ? "Dentro dos padrões" : "Fora dos padrões";
+      const steeringWheelStatus = steeringWheelDistance < vehicleDatabase[currentVehicle].steeringWheelDistance ? "Dentro dos padrões" : "Fora dos padrões";
       logMessage(`Distância do volante: ${steeringWheelDistance} m - ${steeringWheelStatus}`);
+
+      // Atualizar gráfico
+      metricsChart.data.datasets[0].data = [eyeHeight, steeringWheelDistance, shoulderWidth];
+      metricsChart.update();
     }
 
     async function detectLoop() {
