@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8">
+<title>XR Cognitive Glass V2</title>
+
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+<style>
+
+body{
+margin:0;
+background:black;
+font-family:Arial;
+}
+
+#hud{
+position:fixed;
+top:20px;
+left:50%;
+transform:translateX(-50%);
+color:#00ffc8;
+font-size:22px;
+background:rgba(0,0,0,0.6);
+padding:10px 20px;
+border-radius:10px;
+}
+
+#assistant{
+position:fixed;
+top:70px;
+left:50%;
+transform:translateX(-50%);
+width:60%;
+text-align:center;
+color:white;
+font-size:22px;
+}
+
+#subtitle{
+position:fixed;
+bottom:40px;
+left:50%;
+transform:translateX(-50%);
+width:60%;
+text-align:center;
+color:white;
+font-size:26px;
+}
+
+#teleprompter{
+position:fixed;
+bottom:100px;
+left:50%;
+transform:translateX(-50%);
+width:60%;
+text-align:center;
+color:#00ffc8;
+font-size:28px;
+}
+
+#menu{
+position:fixed;
+right:20px;
+top:120px;
+color:white;
+}
+
+button{
+padding:10px;
+margin:5px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div id="hud">XR Assistant Ready</div>
+<div id="assistant"></div>
+<div id="subtitle"></div>
+<div id="teleprompter"></div>
+
+<div id="menu">
+<button onclick="startListening()">Voice</button>
+<button onclick="startTeleprompter()">Teleprompter</button>
+<button onclick="detectObjects()">Vision</button>
+</div>
+
+<a-scene xr-mode-ui="enabled: true">
+
+<a-camera position="0 1.6 0"></a-camera>
+
+<a-sky color="#111"></a-sky>
+
+<a-entity
+text="value: XR Assistant; color:#00FFC8"
+position="0 2 -3">
+</a-entity>
+
+</a-scene>
+
+<script>
+
+const hud = document.getElementById("hud")
+const subtitle = document.getElementById("subtitle")
+const assistant = document.getElementById("assistant")
+const teleprompter = document.getElementById("teleprompter")
+
+let recognition
+
+function startListening(){
+
+recognition = new(window.SpeechRecognition || window.webkitSpeechRecognition)()
+
+recognition.lang="en-US"
+recognition.continuous=true
+
+recognition.onresult = async function(e){
+
+const text = e.results[e.results.length-1][0].transcript
+
+subtitle.innerText = text
+
+processCommand(text)
+
+}
+
+recognition.start()
+
+hud.innerText="Listening..."
+
+}
+
+async function processCommand(text){
+
+if(text.includes("translate")){
+
+let translated = await translate(text)
+
+assistant.innerText = translated
+
+}
+
+else if(text.includes("teleprompter")){
+
+startTeleprompter()
+
+}
+
+else{
+
+let ai = await askAI(text)
+
+assistant.innerText = ai
+
+speak(ai)
+
+}
+
+}
+
+async function askAI(prompt){
+
+const res = await fetch("https://api.openai.com/v1/chat/completions",{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json",
+"Authorization":"Bearer YOUR_API_KEY"
+},
+
+body:JSON.stringify({
+
+model:"gpt-4o-mini",
+
+messages:[{role:"user",content:prompt}]
+
+})
+
+})
+
+const data = await res.json()
+
+return data.choices[0].message.content
+
+}
+
+async function translate(text){
+
+const res = await fetch(
+
+"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=pt&dt=t&q="+encodeURI(text)
+
+)
+
+const data = await res.json()
+
+return data[0][0][0]
+
+}
+
+function speak(text){
+
+const utter = new SpeechSynthesisUtterance(text)
+
+speechSynthesis.speak(utter)
+
+}
+
+function startTeleprompter(){
+
+teleprompter.innerText =
+
+"Artificial intelligence is reshaping human interaction with machines."
+
+let pos = 0
+
+setInterval(()=>{
+
+teleprompter.style.transform =
+`translate(-50%, ${pos--}px)`
+
+},40)
+
+}
+
+async function detectObjects(){
+
+hud.innerText="Vision scanning..."
+
+const model = await tf.loadGraphModel(
+
+"https://tfhub.dev/tensorflow/ssd_mobilenet_v2/1/default/1",
+{fromTFHub:true}
+)
+
+assistant.innerText="Vision model loaded"
+
+}
+
+</script>
+
+</body>
+</html>
