@@ -3,546 +3,605 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>XR Biomechanics Lab</title>
+  <title>XR Clinical Lab V11</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
     :root{
-      --bg: rgba(8,12,20,.88);
-      --line: rgba(255,255,255,.14);
+      --bg: rgba(9, 13, 22, .92);
+      --panel: rgba(13, 20, 34, .94);
+      --line: rgba(255,255,255,.10);
       --text: #fff;
       --muted: #cbd5e1;
-      --ok: #16a34a;
-      --warn: #d97706;
-      --danger: #b91c1c;
-      --off: #64748b;
-      --cyan: #00E5FF;
-      --pink: #FF4FD8;
-      --yellow: #FFD84D;
+      --ok: #22c55e;
+      --warn: #facc15;
+      --danger: #ef4444;
+      --blue: #60a5fa;
+      --cyan: #00e5ff;
+      --pink: #ff4fd8;
     }
 
-    html,body{
-      margin:0;
-      width:100%;
-      height:100%;
-      overflow:hidden;
-      background:#000;
-      color:#fff;
-      font-family:Arial,Helvetica,sans-serif;
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
     }
 
-    #hud{
-      position:fixed;
-      top:10px;
-      left:10px;
-      right:10px;
-      z-index:99999;
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-      align-items:center;
+    #topbar {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      z-index: 99999;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
     }
 
-    .btn,.input,.badge{
-      background:var(--bg);
-      color:#fff;
-      border:1px solid var(--line);
-      border-radius:12px;
-      padding:10px 12px;
-      font-size:13px;
-      box-sizing:border-box;
-      backdrop-filter:blur(8px);
+    .btn, .select, .badge {
+      background: var(--bg);
+      color: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-size: 13px;
+      box-sizing: border-box;
+      backdrop-filter: blur(12px);
     }
 
-    .btn{
-      cursor:pointer;
+    .btn {
+      cursor: pointer;
     }
 
-    .btn:disabled{
-      opacity:.55;
-      cursor:not-allowed;
+    .btn:disabled {
+      opacity: .55;
+      cursor: not-allowed;
     }
 
-    .input{
-      min-width:220px;
-      outline:none;
+    .select {
+      outline: none;
     }
 
-    .badge{
-      cursor:default;
+    #app {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      height: 100%;
     }
 
-    #status{
-      position:fixed;
-      top:74px;
-      right:10px;
-      z-index:99999;
-      width:min(420px, calc(100vw - 20px));
-      background:var(--bg);
-      border:1px solid var(--line);
-      border-radius:16px;
-      padding:12px 14px;
-      box-sizing:border-box;
-      line-height:1.45;
-      font-size:13px;
-      backdrop-filter:blur(8px);
+    #leftPane, #rightPane {
+      position: relative;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
     }
 
-    #status strong{
-      display:block;
-      margin-bottom:6px;
-      font-size:14px;
+    #videoFeed, #overlayCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
 
-    #panel2d{
-      position:fixed;
-      left:10px;
-      bottom:10px;
-      z-index:99999;
-      width:min(520px, calc(100vw - 20px));
-      background:var(--bg);
-      border:1px solid var(--line);
-      border-radius:18px;
-      padding:14px;
-      box-sizing:border-box;
-      backdrop-filter:blur(8px);
+    #videoFeed {
+      transform: scaleX(-1);
+      background: #000;
     }
 
-    #panel2d h3{
-      margin:0 0 12px 0;
-      font-size:16px;
+    #overlayCanvas {
+      pointer-events: none;
     }
 
-    .grid{
-      display:grid;
-      grid-template-columns:repeat(2,minmax(0,1fr));
-      gap:10px;
-      margin-bottom:12px;
+    .floating-card {
+      position: absolute;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-sizing: border-box;
+      backdrop-filter: blur(14px);
+      z-index: 50;
     }
 
-    .metric{
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:10px;
-      background:rgba(255,255,255,.03);
+    #leftMetrics {
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      padding: 14px;
     }
 
-    .metric .label{
-      font-size:12px;
-      color:var(--muted);
-      margin-bottom:4px;
+    #rightMetrics {
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      padding: 14px;
     }
 
-    .metric .value{
-      font-size:26px;
-      font-weight:700;
+    #statusBox {
+      top: 74px;
+      right: 10px;
+      width: min(420px, calc(100vw - 20px));
+      padding: 14px;
+      position: fixed;
+      z-index: 99998;
     }
 
-    .metric .sub{
-      font-size:12px;
-      color:var(--muted);
-      margin-top:4px;
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 10px;
+      margin-top: 10px;
     }
 
-    #timelineWrap{
-      margin-top:8px;
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:10px;
-      background:rgba(255,255,255,.03);
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px;
+      background: rgba(255,255,255,.03);
     }
 
-    #timeline{
-      width:100%;
+    .metric .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
     }
 
-    #eventList{
-      margin-top:10px;
-      max-height:140px;
-      overflow:auto;
-      border:1px solid var(--line);
-      border-radius:12px;
-      padding:8px;
-      background:rgba(255,255,255,.02);
-      font-size:12px;
+    .metric .value {
+      font-size: 25px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
     }
 
-    .evt{
-      padding:6px 0;
-      border-bottom:1px solid rgba(255,255,255,.06);
+    .metric .sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
     }
 
-    .evt:last-child{
-      border-bottom:none;
+    #protocolBox, #timelineBox, #reportBox, #compareBox {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px;
+      margin-top: 10px;
+      background: rgba(255,255,255,.03);
     }
 
-    #videoWrap{
-      position:fixed;
-      right:10px;
-      bottom:10px;
-      width:min(420px, 36vw);
-      aspect-ratio:16/10;
-      z-index:99998;
-      background:#000;
-      border:1px solid var(--line);
-      border-radius:16px;
-      overflow:hidden;
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
-    #videoFeed, #overlayCanvas{
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      object-fit:cover;
+    #timeline {
+      width: 100%;
+      margin-top: 10px;
     }
 
-    #videoFeed{
-      transform:scaleX(-1);
-      background:#000;
+    #eventList {
+      margin-top: 10px;
+      max-height: 120px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: rgba(255,255,255,.02);
+      font-size: 12px;
     }
 
-    #overlayCanvas{
-      pointer-events:none;
+    .evt {
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,.06);
     }
 
-    #videoMetrics{
-      position:absolute;
-      left:10px;
-      bottom:10px;
-      background:rgba(0,0,0,.55);
-      border:1px solid rgba(255,255,255,.12);
-      border-radius:10px;
-      padding:8px 10px;
-      font-size:12px;
-      line-height:1.4;
+    .evt:last-child {
+      border-bottom: none;
     }
 
-    #hiddenVideo{
-      display:none;
+    #aframeMount {
+      width: 100%;
+      height: 100%;
+    }
+
+    #hiddenVideo {
+      display: none;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
     }
   </style>
 </head>
 <body>
 
-  <div id="hud">
+  <div id="topbar">
     <button class="btn" id="btnStartCamera">Iniciar câmera</button>
     <button class="btn" id="btnStopCamera">Parar câmera</button>
-    <button class="btn" id="btnLoadModelAI">Carregar IA</button>
+    <button class="btn" id="btnLoadModels">Carregar modelos</button>
     <button class="btn" id="btnStartSession">Iniciar sessão</button>
     <button class="btn" id="btnStopSession">Parar sessão</button>
     <button class="btn" id="btnReset">Resetar</button>
     <button class="btn" id="btnExportExcel">Exportar Excel</button>
     <button class="btn" id="btnExportJSON">Exportar JSON</button>
+
+    <select class="select" id="protocolSelect">
+      <option value="posture">Protocolo postural</option>
+      <option value="cervical">Protocolo cervical</option>
+      <option value="shoulder">Protocolo ombro</option>
+      <option value="trunk">Protocolo tronco</option>
+      <option value="occupational">Protocolo ocupacional</option>
+    </select>
+
     <span class="badge" id="sessionBadge">Sessão: inativa</span>
     <span class="badge" id="riskBadge">Risco: -</span>
+    <span class="badge" id="affectBadge">Afetivo: -</span>
   </div>
 
-  <div id="status">
+  <div id="statusBox" class="floating-card">
     <strong>Status</strong>
-    <div id="statusText">Aguardando inicialização.</div>
-  </div>
-
-  <div id="panel2d">
-    <h3>XR Biomechanics Lab</h3>
-
-    <div class="grid">
-      <div class="metric">
-        <div class="label">Ângulo cervical</div>
-        <div class="value" id="neckValue">-</div>
-        <div class="sub" id="neckState">Sem leitura</div>
-      </div>
-
-      <div class="metric">
-        <div class="label">Elevação do ombro</div>
-        <div class="value" id="shoulderValue">-</div>
-        <div class="sub" id="shoulderState">Sem leitura</div>
-      </div>
-
-      <div class="metric">
-        <div class="label">Flexão lateral do tronco</div>
-        <div class="value" id="trunkValue">-</div>
-        <div class="sub" id="trunkState">Sem leitura</div>
-      </div>
-
-      <div class="metric">
-        <div class="label">Simetria corporal</div>
-        <div class="value" id="symmetryValue">-</div>
-        <div class="sub" id="symmetryState">Sem leitura</div>
-      </div>
-    </div>
-
-    <div id="timelineWrap">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <strong style="font-size:13px;">Timeline da sessão</strong>
-        <span style="font-size:12px;color:var(--muted);" id="timeLabel">00:00</span>
-      </div>
-      <input id="timeline" type="range" min="0" max="0" value="0" step="1" />
-      <div id="eventList"></div>
+    <div id="statusText" style="margin-top:6px;">Aguardando inicialização.</div>
+    <div class="muted" style="margin-top:8px;">
+      Fluxo: câmera → modelos → sessão → protocolo → relatório.
     </div>
   </div>
 
-  <div id="videoWrap">
-    <video id="videoFeed" autoplay playsinline muted></video>
-    <canvas id="overlayCanvas"></canvas>
-    <div id="videoMetrics">
-      FPS: <span id="fpsValue">0</span><br />
-      Frames: <span id="frameCountValue">0</span><br />
-      Eventos: <span id="eventCountValue">0</span><br />
-      Bones: <span id="boneCountValue">0</span>
+  <div id="app">
+    <div id="leftPane">
+      <video id="videoFeed" autoplay playsinline muted></video>
+      <canvas id="overlayCanvas"></canvas>
+
+      <div id="leftMetrics" class="floating-card">
+        <strong>Corpo + Face em tempo real</strong>
+
+        <div class="metrics-grid">
+          <div class="metric">
+            <div class="label">Ângulo cervical</div>
+            <div class="value" id="neckValue">-</div>
+            <div class="sub" id="neckState">Sem leitura</div>
+          </div>
+
+          <div class="metric">
+            <div class="label">Elevação de ombro</div>
+            <div class="value" id="shoulderValue">-</div>
+            <div class="sub" id="shoulderState">Sem leitura</div>
+          </div>
+
+          <div class="metric">
+            <div class="label">Inclinação do tronco</div>
+            <div class="value" id="trunkValue">-</div>
+            <div class="sub" id="trunkState">Sem leitura</div>
+          </div>
+
+          <div class="metric">
+            <div class="label">Desconforto facial</div>
+            <div class="value" id="affectValue">-</div>
+            <div class="sub" id="affectState">Sem leitura</div>
+          </div>
+        </div>
+
+        <div id="protocolBox">
+          <div class="row">
+            <strong>Protocolo guiado</strong>
+            <span id="countdown">--</span>
+          </div>
+          <div style="margin-top:8px;" id="stepText">Selecione um protocolo e inicie a sessão.</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="rightPane">
+      <div id="aframeMount">
+        <a-scene id="xrScene" embedded renderer="colorManagement:true" background="color:#09111d">
+          <a-assets>
+            <a-asset-item id="humanModel" src="human_malefemale_basemesh_rigged.glb"></a-asset-item>
+          </a-assets>
+
+          <a-light type="ambient" intensity="0.7"></a-light>
+          <a-light type="directional" position="1 3 2" intensity="0.95"></a-light>
+
+          <a-plane rotation="-90 0 0" width="24" height="24" color="#162033"></a-plane>
+
+          <a-entity id="avatarRoot" position="0 0 -2.25" rotation="0 180 0">
+            <a-entity id="avatarEntity" gltf-model="#humanModel"></a-entity>
+
+            <a-sphere id="heatHead" radius="0.06" position="0 1.58 0.02" color="#22c55e" opacity="0.65"></a-sphere>
+            <a-sphere id="heatShoulderL" radius="0.055" position="-0.18 1.36 0.02" color="#22c55e" opacity="0.6"></a-sphere>
+            <a-sphere id="heatShoulderR" radius="0.055" position="0.18 1.36 0.02" color="#22c55e" opacity="0.6"></a-sphere>
+            <a-sphere id="heatTrunk" radius="0.09" position="0 1.08 0.02" color="#22c55e" opacity="0.45"></a-sphere>
+          </a-entity>
+
+          <a-entity id="ghostRoot" visible="false" position="0 0 -2.25">
+            <a-sphere id="ghostHead" radius="0.05" color="#00e5ff" opacity="0.22" position="0 1.55 0"></a-sphere>
+            <a-sphere id="ghostLHand" radius="0.04" color="#ff4fd8" opacity="0.18" position="-0.22 1.12 0"></a-sphere>
+            <a-sphere id="ghostRHand" radius="0.04" color="#ffd84d" opacity="0.18" position="0.22 1.12 0"></a-sphere>
+          </a-entity>
+
+          <a-entity id="xrPanel" position="0 1.45 -1.15">
+            <a-plane width="1.62" height="0.96" color="#0b1220" material="shader:flat;opacity:0.9"></a-plane>
+            <a-text value="XR Clinical Fusion" align="center" position="0 0.31 0.01" color="#ffffff" width="1.8"></a-text>
+            <a-text id="xrLine1" value="Neck: -" align="left" position="-0.66 0.12 0.01" color="#cbd5e1" width="1.45"></a-text>
+            <a-text id="xrLine2" value="Shoulder: -" align="left" position="-0.66 -0.02 0.01" color="#cbd5e1" width="1.45"></a-text>
+            <a-text id="xrLine3" value="Trunk: -" align="left" position="-0.66 -0.16 0.01" color="#cbd5e1" width="1.45"></a-text>
+            <a-text id="xrLine4" value="Affect: -" align="left" position="-0.66 -0.30 0.01" color="#cbd5e1" width="1.45"></a-text>
+            <a-text id="xrLine5" value="Composite: -" align="left" position="-0.66 -0.44 0.01" color="#cbd5e1" width="1.45"></a-text>
+          </a-entity>
+
+          <a-camera position="0 1.6 0"></a-camera>
+        </a-scene>
+      </div>
+
+      <div id="rightMetrics" class="floating-card">
+        <strong>Digital twin + relatório</strong>
+
+        <div id="timelineBox">
+          <div class="row">
+            <strong>Timeline</strong>
+            <span id="timeLabel">00:00</span>
+          </div>
+          <input id="timeline" type="range" min="0" max="0" value="0" step="1" />
+          <div id="eventList"></div>
+        </div>
+
+        <div id="reportBox">
+          <div class="row">
+            <strong>Resumo clínico</strong>
+            <span id="reportRisk">-</span>
+          </div>
+          <div style="margin-top:8px;font-size:13px;color:var(--muted);" id="reportText">
+            O relatório será gerado ao final da sessão.
+          </div>
+        </div>
+
+        <div id="compareBox">
+          <div class="row">
+            <strong>Comparação com última sessão</strong>
+            <span id="compareStatus">-</span>
+          </div>
+          <div style="margin-top:8px;font-size:13px;color:var(--muted);" id="compareText">
+            Ainda não há sessão anterior salva localmente.
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <video id="hiddenVideo" autoplay playsinline muted></video>
 
-  <a-scene
-    id="scene"
-    xr-mode-ui="enabled: true"
-    renderer="colorManagement: true"
-    webxr="requiredFeatures: local-floor; optionalFeatures: hand-tracking"
-    background="color: #0b1020">
-
-    <a-assets>
-      <a-asset-item id="humanModel" src="human_malefemale_basemesh_rigged.glb"></a-asset-item>
-    </a-assets>
-
-    <a-light type="ambient" intensity="0.7"></a-light>
-    <a-light type="directional" position="1 3 2" intensity="0.9"></a-light>
-
-    <a-plane rotation="-90 0 0" width="24" height="24" color="#1a2238"></a-plane>
-
-    <a-entity id="rig">
-      <a-camera id="camera" position="0 1.6 0" look-controls wasd-controls="enabled:false"></a-camera>
-    </a-entity>
-
-    <a-entity id="avatarRoot" position="0 0 -2.2" rotation="0 180 0" scale="1 1 1">
-      <a-entity id="avatarEntity" gltf-model="#humanModel"></a-entity>
-    </a-entity>
-
-    <a-entity id="panelXR" position="0 1.45 -1.15">
-      <a-plane width="1.5" height="0.9" color="#0b1220" material="shader:flat;opacity:0.88"></a-plane>
-      <a-text id="xrTitle" value="Biomechanics Session" color="#fff" align="center" position="0 0.28 0.01" width="1.8"></a-text>
-      <a-text id="xrLine1" value="Neck: -" color="#cbd5e1" align="left" position="-0.6 0.10 0.01" width="1.4"></a-text>
-      <a-text id="xrLine2" value="Shoulder: -" color="#cbd5e1" align="left" position="-0.6 -0.04 0.01" width="1.4"></a-text>
-      <a-text id="xrLine3" value="Trunk: -" color="#cbd5e1" align="left" position="-0.6 -0.18 0.01" width="1.4"></a-text>
-      <a-text id="xrLine4" value="Risk: -" color="#cbd5e1" align="left" position="-0.6 -0.32 0.01" width="1.4"></a-text>
-    </a-entity>
-
-  </a-scene>
-
   <script>
     const state = {
       stream: null,
-      detector: null,
-      sessionActive: false,
+      poseDetector: null,
+      faceDetector: null,
       cameraReady: false,
       avatarReady: false,
-      avatar: null,
+      avatarMesh: null,
       bones: {},
+      sessionActive: false,
+      protocol: "posture",
+      protocolSteps: [],
+      protocolIndex: 0,
+      protocolStepEndAt: null,
+      lastEventAt: {},
+      sessionStartAt: null,
+      frames: [],
+      events: [],
+      report: null,
+      previousReport: null,
+      smooth: {
+        neck: null,
+        shoulder: null,
+        trunk: null,
+        affect: null
+      },
       metrics: {
         neckAngle: null,
         shoulderElevation: null,
         trunkLean: null,
         symmetryScore: null,
-        riskLevel: "-"
+        biomechRisk: "Baixo",
+        facialEffortScore: null,
+        discomfortScore: null,
+        affectiveLabel: "-",
+        compositeRisk: "-"
       },
-      frames: [],
-      events: [],
       fps: 0,
       fpsCounter: 0,
       fpsStamp: performance.now(),
-      rafId: null,
-      sessionStartTs: null,
-      lastEventTs: {},
-      currentFrameIndex: 0
+      rafId: null
+    };
+
+    const protocols = {
+      posture: [
+        { label: "Posicione-se em pé em postura neutra", seconds: 5 },
+        { label: "Mantenha cabeça e ombros alinhados", seconds: 5 },
+        { label: "Mantenha tronco estável", seconds: 5 },
+        { label: "Finalize em postura neutra", seconds: 4 }
+      ],
+      cervical: [
+        { label: "Posição neutra cervical", seconds: 4 },
+        { label: "Projete levemente a cabeça à frente", seconds: 5 },
+        { label: "Mantenha a posição", seconds: 5 },
+        { label: "Retorne ao neutro", seconds: 4 }
+      ],
+      shoulder: [
+        { label: "Posição neutra", seconds: 4 },
+        { label: "Eleve lentamente um braço", seconds: 6 },
+        { label: "Mantenha o braço elevado", seconds: 5 },
+        { label: "Retorne ao neutro", seconds: 4 }
+      ],
+      trunk: [
+        { label: "Posição neutra", seconds: 4 },
+        { label: "Incline levemente o tronco", seconds: 6 },
+        { label: "Mantenha a inclinação", seconds: 5 },
+        { label: "Retorne ao neutro", seconds: 4 }
+      ],
+      occupational: [
+        { label: "Posição neutra inicial", seconds: 4 },
+        { label: "Repita o gesto funcional", seconds: 8 },
+        { label: "Mantenha a postura de trabalho", seconds: 6 },
+        { label: "Retorne ao neutro", seconds: 4 }
+      ]
     };
 
     const ui = {
-      statusText: document.getElementById("statusText"),
+      videoFeed: document.getElementById("videoFeed"),
+      hiddenVideo: document.getElementById("hiddenVideo"),
+      overlayCanvas: document.getElementById("overlayCanvas"),
+      protocolSelect: document.getElementById("protocolSelect"),
       sessionBadge: document.getElementById("sessionBadge"),
       riskBadge: document.getElementById("riskBadge"),
+      affectBadge: document.getElementById("affectBadge"),
+      statusText: document.getElementById("statusText"),
+
       neckValue: document.getElementById("neckValue"),
-      neckState: document.getElementById("neckState"),
       shoulderValue: document.getElementById("shoulderValue"),
-      shoulderState: document.getElementById("shoulderState"),
       trunkValue: document.getElementById("trunkValue"),
+      affectValue: document.getElementById("affectValue"),
+
+      neckState: document.getElementById("neckState"),
+      shoulderState: document.getElementById("shoulderState"),
       trunkState: document.getElementById("trunkState"),
-      symmetryValue: document.getElementById("symmetryValue"),
-      symmetryState: document.getElementById("symmetryState"),
+      affectState: document.getElementById("affectState"),
+
+      countdown: document.getElementById("countdown"),
+      stepText: document.getElementById("stepText"),
+
       timeline: document.getElementById("timeline"),
-      eventList: document.getElementById("eventList"),
       timeLabel: document.getElementById("timeLabel"),
-      fpsValue: document.getElementById("fpsValue"),
-      frameCountValue: document.getElementById("frameCountValue"),
-      eventCountValue: document.getElementById("eventCountValue"),
-      boneCountValue: document.getElementById("boneCountValue"),
+      eventList: document.getElementById("eventList"),
+
+      reportRisk: document.getElementById("reportRisk"),
+      reportText: document.getElementById("reportText"),
+      compareStatus: document.getElementById("compareStatus"),
+      compareText: document.getElementById("compareText"),
+
       xrLine1: document.getElementById("xrLine1"),
       xrLine2: document.getElementById("xrLine2"),
       xrLine3: document.getElementById("xrLine3"),
       xrLine4: document.getElementById("xrLine4"),
-      videoFeed: document.getElementById("videoFeed"),
-      hiddenVideo: document.getElementById("hiddenVideo"),
-      overlayCanvas: document.getElementById("overlayCanvas")
+      xrLine5: document.getElementById("xrLine5"),
+
+      heatHead: document.getElementById("heatHead"),
+      heatShoulderL: document.getElementById("heatShoulderL"),
+      heatShoulderR: document.getElementById("heatShoulderR"),
+      heatTrunk: document.getElementById("heatTrunk"),
+
+      ghostRoot: document.getElementById("ghostRoot"),
+      ghostHead: document.getElementById("ghostHead"),
+      ghostLHand: document.getElementById("ghostLHand"),
+      ghostRHand: document.getElementById("ghostRHand")
     };
 
     const ctx = ui.overlayCanvas.getContext("2d");
 
-    function setStatus(msg){
+    function setStatus(msg) {
       ui.statusText.textContent = msg;
       console.log("[STATUS]", msg);
     }
 
-    function setSessionBadge(){
-      ui.sessionBadge.textContent = state.sessionActive ? "Sessão: ativa" : "Sessão: inativa";
-      ui.riskBadge.textContent = "Risco: " + state.metrics.riskLevel;
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
     }
 
-    function updateFPS(){
-      state.fpsCounter++;
-      const now = performance.now();
-      if (now - state.fpsStamp >= 1000){
-        state.fps = state.fpsCounter;
-        state.fpsCounter = 0;
-        state.fpsStamp = now;
-      }
+    function ema(prev, value, alpha = 0.2) {
+      if (value == null || Number.isNaN(value)) return prev;
+      if (prev == null) return value;
+      return prev * (1 - alpha) + value * alpha;
     }
 
-    function resizeCanvas(){
+    function deg(v) {
+      return v == null || Number.isNaN(v) ? null : v * 180 / Math.PI;
+    }
+
+    function round1(v) {
+      return v == null || Number.isNaN(v) ? "-" : `${v.toFixed(1)}°`;
+    }
+
+    function isVisible(kp, min = 0.25) {
+      return !!kp && (kp.score == null || kp.score >= min);
+    }
+
+    function getKPMap(keypoints) {
+      const map = {};
+      keypoints.forEach(k => map[k.name] = k);
+      return map;
+    }
+
+    function angleLine(a, b) {
+      return deg(Math.atan2(b.y - a.y, b.x - a.x));
+    }
+
+    function distance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function angleABC(a, b, c) {
+      const abx = a.x - b.x;
+      const aby = a.y - b.y;
+      const cbx = c.x - b.x;
+      const cby = c.y - b.y;
+      const dot = abx * cbx + aby * cby;
+      const mag1 = Math.hypot(abx, aby);
+      const mag2 = Math.hypot(cbx, cby);
+      if (!mag1 || !mag2) return null;
+      const cos = clamp(dot / (mag1 * mag2), -1, 1);
+      return deg(Math.acos(cos));
+    }
+
+    function resizeCanvas() {
       const rect = ui.videoFeed.getBoundingClientRect();
       ui.overlayCanvas.width = Math.max(1, Math.floor(rect.width));
       ui.overlayCanvas.height = Math.max(1, Math.floor(rect.height));
     }
 
-    function deg(v){
-      return v == null || Number.isNaN(v) ? null : v * 180 / Math.PI;
-    }
-
-    function round1(v){
-      return v == null || Number.isNaN(v) ? "-" : `${v.toFixed(1)}°`;
-    }
-
-    function clamp(v,min,max){
-      return Math.max(min, Math.min(max, v));
-    }
-
-    function getKPMap(keypoints){
-      const map = {};
-      for (const kp of keypoints){
-        map[kp.name] = kp;
-      }
-      return map;
-    }
-
-    function isVisible(kp, min=0.25){
-      return !!kp && (kp.score == null || kp.score >= min);
-    }
-
-    function angleABC(a,b,c){
-      const abx = a.x - b.x;
-      const aby = a.y - b.y;
-      const cbx = c.x - b.x;
-      const cby = c.y - b.y;
-
-      const dot = abx * cbx + aby * cby;
-      const mag1 = Math.hypot(abx, aby);
-      const mag2 = Math.hypot(cbx, cby);
-      if (!mag1 || !mag2) return null;
-
-      const cos = clamp(dot / (mag1 * mag2), -1, 1);
-      return deg(Math.acos(cos));
-    }
-
-    function angleLine(a,b){
-      return deg(Math.atan2(b.y - a.y, b.x - a.x));
-    }
-
-    function distance(a,b){
-      return Math.hypot(a.x - b.x, a.y - b.y);
-    }
-
-    function addEvent(type, severity, details={}){
+    function addEvent(type, severity, details = {}) {
       const now = Date.now();
       const key = `${type}_${severity}`;
-      const debounceMs = 1800;
-      if (state.lastEventTs[key] && now - state.lastEventTs[key] < debounceMs) return;
-      state.lastEventTs[key] = now;
+      if (state.lastEventAt[key] && now - state.lastEventAt[key] < 1800) return;
+      state.lastEventAt[key] = now;
 
       state.events.push({
         timestamp: new Date(now).toISOString(),
         t: now,
+        protocol: state.protocol,
         type,
         severity,
         ...details
       });
 
-      if (state.events.length > 300) state.events.shift();
-      renderEventList();
+      if (state.events.length > 500) state.events.shift();
+      renderEvents();
     }
 
-    function renderEventList(){
+    function renderEvents() {
       ui.eventList.innerHTML = "";
-      const recent = [...state.events].slice(-12).reverse();
-
-      recent.forEach(evt => {
-        const row = document.createElement("div");
-        row.className = "evt";
-        row.textContent = `${new Date(evt.t).toLocaleTimeString("pt-BR")} · ${evt.type} · ${evt.severity}`;
-        ui.eventList.appendChild(row);
+      [...state.events].slice(-12).reverse().forEach(evt => {
+        const div = document.createElement("div");
+        div.className = "evt";
+        div.textContent = `${new Date(evt.t).toLocaleTimeString("pt-BR")} · ${evt.type} · ${evt.severity}`;
+        ui.eventList.appendChild(div);
       });
-
-      ui.eventCountValue.textContent = String(state.events.length);
     }
 
-    function updateMetricsUI(){
-      const m = state.metrics;
+    async function startCamera() {
+      if (state.stream) {
+        setStatus("Câmera já iniciada.");
+        return;
+      }
 
-      ui.neckValue.textContent = round1(m.neckAngle);
-      ui.shoulderValue.textContent = round1(m.shoulderElevation);
-      ui.trunkValue.textContent = round1(m.trunkLean);
-      ui.symmetryValue.textContent = m.symmetryScore == null ? "-" : `${m.symmetryScore.toFixed(0)}%`;
-
-      ui.neckState.textContent =
-        m.neckAngle == null ? "Sem leitura" :
-        m.neckAngle > 25 ? "Alerta cervical" :
-        m.neckAngle > 15 ? "Atenção" : "Estável";
-
-      ui.shoulderState.textContent =
-        m.shoulderElevation == null ? "Sem leitura" :
-        m.shoulderElevation > 70 ? "Risco alto" :
-        m.shoulderElevation > 45 ? "Atenção" : "Estável";
-
-      ui.trunkState.textContent =
-        m.trunkLean == null ? "Sem leitura" :
-        m.trunkLean > 20 ? "Compensação" :
-        m.trunkLean > 10 ? "Atenção" : "Estável";
-
-      ui.symmetryState.textContent =
-        m.symmetryScore == null ? "Sem leitura" :
-        m.symmetryScore < 70 ? "Assimetria relevante" :
-        m.symmetryScore < 85 ? "Leve assimetria" : "Boa simetria";
-
-      ui.xrLine1.setAttribute("value", `Neck: ${round1(m.neckAngle)}`);
-      ui.xrLine2.setAttribute("value", `Shoulder: ${round1(m.shoulderElevation)}`);
-      ui.xrLine3.setAttribute("value", `Trunk: ${round1(m.trunkLean)}`);
-      ui.xrLine4.setAttribute("value", `Risk: ${m.riskLevel}`);
-
-      setSessionBadge();
-      ui.fpsValue.textContent = String(state.fps);
-      ui.frameCountValue.textContent = String(state.frames.length);
-      ui.boneCountValue.textContent = String(Object.keys(state.bones).length);
-    }
-
-    async function startCamera(){
-      try{
-        if (state.stream){
-          setStatus("Câmera já iniciada.");
-          return;
-        }
-
+      try {
         state.stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "user",
@@ -561,15 +620,16 @@
         state.cameraReady = true;
         resizeCanvas();
         setStatus("Câmera iniciada.");
-      }catch(err){
+      } catch (err) {
         console.error(err);
         setStatus("Falha ao iniciar a câmera.");
       }
     }
 
-    function stopCamera(){
+    function stopCamera() {
       if (!state.stream) return;
-      state.stream.getTracks().forEach(t => t.stop());
+
+      state.stream.getTracks().forEach(track => track.stop());
       state.stream = null;
       state.cameraReady = false;
       ui.hiddenVideo.srcObject = null;
@@ -577,90 +637,75 @@
       setStatus("Câmera parada.");
     }
 
-    async function loadAI(){
-      try{
-        if (state.detector){
-          setStatus("IA já carregada.");
-          return;
-        }
-
-        setStatus("Carregando TensorFlow...");
+    async function loadModels() {
+      try {
         await tf.ready();
 
-        setStatus("Carregando detector de pose...");
-        state.detector = await poseDetection.createDetector(
-          poseDetection.SupportedModels.MoveNet,
+        state.poseDetector = await poseDetection.createDetector(
+          poseDetection.SupportedModels.BlazePose,
           {
-            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-            enableSmoothing: true
+            runtime: "tfjs",
+            modelType: "full"
           }
         );
 
-        setStatus("IA carregada.");
-      }catch(err){
+        state.faceDetector = await faceLandmarksDetection.createDetector(
+          faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
+          { runtime: "tfjs" }
+        );
+
+        setStatus("Modelos carregados.");
+      } catch (err) {
         console.error(err);
-        setStatus("Falha ao carregar IA.");
+        setStatus("Falha ao carregar modelos.");
       }
     }
 
-    function findBoneStartsWith(root, prefix){
+    function findBone(root, candidates) {
       let found = null;
       root.traverse(obj => {
-        if (found) return;
-        if (obj.isBone && obj.name.startsWith(prefix)) found = obj;
+        if (found || !obj.isBone) return;
+        const name = obj.name.toLowerCase();
+        if (candidates.some(c => name.includes(c))) found = obj;
       });
       return found;
     }
 
-    function captureAvatarBones(){
-      const avatarObj = document.querySelector("#avatarEntity").getObject3D("mesh");
-      if (!avatarObj){
-        setStatus("Mesh do avatar ainda não disponível.");
-        return;
-      }
+    function captureAvatarBones() {
+      const mesh = document.querySelector("#avatarEntity").getObject3D("mesh");
+      if (!mesh) return;
 
-      state.avatar = avatarObj;
+      state.avatarMesh = mesh;
 
-      const prefixes = {
-        head: "head_",
-        neck: "neck_",
-        spine: "spine_fk.002",
-        upperArmL: "upper_arm_fk.L",
-        forearmL: "forearm_fk.L",
-        handL: "hand_fk.L",
-        upperArmR: "upper_arm_fk.R",
-        forearmR: "forearm_fk.R",
-        handR: "hand_fk.R",
-        thighL: "thigh_fk.L",
-        shinL: "shin_fk.L",
-        footL: "foot_fk.L",
-        thighR: "thigh_fk.R",
-        shinR: "shin_fk.R",
-        footR: "foot_fk.R"
+      state.bones = {
+        head: findBone(mesh, ["head"]),
+        neck: findBone(mesh, ["neck"]),
+        spineHigh: findBone(mesh, ["spine_fk.002", "spine.003", "spine_03"]),
+        spineMid: findBone(mesh, ["spine_fk.001", "spine.002", "spine_02"]),
+        upperArmL: findBone(mesh, ["upper_arm_fk.l", "upperarm_l", "arm.l"]),
+        forearmL: findBone(mesh, ["forearm_fk.l", "lowerarm_l", "forearm.l"]),
+        handL: findBone(mesh, ["hand_fk.l", "hand.l"]),
+        upperArmR: findBone(mesh, ["upper_arm_fk.r", "upperarm_r", "arm.r"]),
+        forearmR: findBone(mesh, ["forearm_fk.r", "lowerarm_r", "forearm.r"]),
+        handR: findBone(mesh, ["hand_fk.r", "hand.r"])
       };
 
-      Object.entries(prefixes).forEach(([key, prefix]) => {
-        const bone = findBoneStartsWith(avatarObj, prefix);
-        if (bone) state.bones[key] = bone;
-      });
-
       state.avatarReady = true;
-      updateMetricsUI();
-      setStatus("Bones do avatar mapeados.");
+      setStatus("Avatar pronto.");
     }
 
-    function drawKP(kp, color="#00E5FF", radius=4){
-      if (!isVisible(kp)) return;
-      const x = ui.overlayCanvas.width - (kp.x * ui.overlayCanvas.width / ui.hiddenVideo.videoWidth);
-      const y = kp.y * ui.overlayCanvas.height / ui.hiddenVideo.videoHeight;
+    function drawPoint(x, y, color = "#00E5FF", r = 4) {
+      const drawX = ui.overlayCanvas.width - (x * ui.overlayCanvas.width / ui.hiddenVideo.videoWidth);
+      const drawY = y * ui.overlayCanvas.height / ui.hiddenVideo.videoHeight;
       ctx.beginPath();
       ctx.fillStyle = color;
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.arc(drawX, drawY, r, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    function drawSeg(a,b,color="#FFD84D", lineWidth=3){
-      if (!isVisible(a) || !isVisible(b)) return;
+    function drawSegment(a, b, color = "#FFD84D", width = 3) {
+      if (!a || !b) return;
+
       const ax = ui.overlayCanvas.width - (a.x * ui.overlayCanvas.width / ui.hiddenVideo.videoWidth);
       const ay = a.y * ui.overlayCanvas.height / ui.hiddenVideo.videoHeight;
       const bx = ui.overlayCanvas.width - (b.x * ui.overlayCanvas.width / ui.hiddenVideo.videoWidth);
@@ -668,48 +713,13 @@
 
       ctx.beginPath();
       ctx.strokeStyle = color;
-      ctx.lineWidth = lineWidth;
+      ctx.lineWidth = width;
       ctx.moveTo(ax, ay);
       ctx.lineTo(bx, by);
       ctx.stroke();
     }
 
-    function drawPose(keypoints){
-      const kp = getKPMap(keypoints);
-
-      const skeleton = [
-        ["left_shoulder","right_shoulder"],
-        ["left_shoulder","left_elbow"],
-        ["left_elbow","left_wrist"],
-        ["right_shoulder","right_elbow"],
-        ["right_elbow","right_wrist"],
-        ["left_shoulder","left_hip"],
-        ["right_shoulder","right_hip"],
-        ["left_hip","right_hip"],
-        ["left_hip","left_knee"],
-        ["left_knee","left_ankle"],
-        ["right_hip","right_knee"],
-        ["right_knee","right_ankle"],
-        ["nose","left_shoulder"],
-        ["nose","right_shoulder"]
-      ];
-
-      skeleton.forEach(([a,b]) => drawSeg(kp[a], kp[b]));
-      Object.values(kp).forEach(point => drawKP(point));
-    }
-
-    function inferRiskLevel(m){
-      let risk = "Baixo";
-      if ((m.neckAngle ?? 0) > 15 || (m.shoulderElevation ?? 0) > 45 || (m.trunkLean ?? 0) > 10){
-        risk = "Moderado";
-      }
-      if ((m.neckAngle ?? 0) > 25 || (m.shoulderElevation ?? 0) > 70 || (m.trunkLean ?? 0) > 20){
-        risk = "Alto";
-      }
-      return risk;
-    }
-
-    function computeMetrics(keypoints){
+    function computeBiomech(keypoints) {
       const kp = getKPMap(keypoints);
 
       let neckAngle = null;
@@ -727,313 +737,677 @@
       const lh = kp.left_hip;
       const rh = kp.right_hip;
 
-      if (isVisible(nose) && isVisible(ls) && isVisible(rs)){
-        const shoulderMid = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
-        const verticalRef = { x: shoulderMid.x, y: shoulderMid.y - 100 };
-        neckAngle = angleABC(verticalRef, shoulderMid, nose);
+      if (isVisible(nose) && isVisible(ls) && isVisible(rs)) {
+        const sm = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
+        const ref = { x: sm.x, y: sm.y - 100 };
+        neckAngle = angleABC(ref, sm, nose);
       }
 
-      if (isVisible(ls) && isVisible(le)){
-        const leftArmToVertical = Math.abs(90 - Math.abs(angleLine(ls, le)));
-        shoulderElevation = leftArmToVertical;
+      if (isVisible(ls) && isVisible(le)) {
+        shoulderElevation = Math.abs(90 - Math.abs(angleLine(ls, le)));
       }
-      if (isVisible(rs) && isVisible(re)){
-        const rightArmToVertical = Math.abs(90 - Math.abs(angleLine(rs, re)));
-        shoulderElevation = shoulderElevation == null ? rightArmToVertical : Math.max(shoulderElevation, rightArmToVertical);
-      }
-
-      if (isVisible(ls) && isVisible(rs) && isVisible(lh) && isVisible(rh)){
-        const shoulderMid = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
-        const hipMid = { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 };
-        const torsoAngle = Math.abs(angleLine(shoulderMid, hipMid) + 90);
-        trunkLean = torsoAngle;
+      if (isVisible(rs) && isVisible(re)) {
+        const r = Math.abs(90 - Math.abs(angleLine(rs, re)));
+        shoulderElevation = shoulderElevation == null ? r : Math.max(shoulderElevation, r);
       }
 
-      if (isVisible(lw) && isVisible(rw) && isVisible(ls) && isVisible(rs)){
+      if (isVisible(ls) && isVisible(rs) && isVisible(lh) && isVisible(rh)) {
+        const sm = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
+        const hm = { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 };
+        trunkLean = Math.abs(angleLine(sm, hm) + 90);
+      }
+
+      if (isVisible(ls) && isVisible(rs) && isVisible(lw) && isVisible(rw)) {
         const leftReach = distance(ls, lw);
         const rightReach = distance(rs, rw);
         const maxD = Math.max(leftReach, rightReach, 1);
         symmetryScore = 100 - (Math.abs(leftReach - rightReach) / maxD) * 100;
       }
 
-      state.metrics.neckAngle = neckAngle;
-      state.metrics.shoulderElevation = shoulderElevation;
-      state.metrics.trunkLean = trunkLean;
+      state.smooth.neck = ema(state.smooth.neck, neckAngle, 0.22);
+      state.smooth.shoulder = ema(state.smooth.shoulder, shoulderElevation, 0.22);
+      state.smooth.trunk = ema(state.smooth.trunk, trunkLean, 0.22);
+
+      state.metrics.neckAngle = state.smooth.neck;
+      state.metrics.shoulderElevation = state.smooth.shoulder;
+      state.metrics.trunkLean = state.smooth.trunk;
       state.metrics.symmetryScore = symmetryScore;
-      state.metrics.riskLevel = inferRiskLevel(state.metrics);
 
-      if ((neckAngle ?? 0) > 25) addEvent("Cervical risk", "alto", { angle: neckAngle });
-      else if ((neckAngle ?? 0) > 15) addEvent("Cervical warning", "moderado", { angle: neckAngle });
-
-      if ((shoulderElevation ?? 0) > 70) addEvent("Shoulder elevation", "alto", { angle: shoulderElevation });
-      else if ((shoulderElevation ?? 0) > 45) addEvent("Shoulder warning", "moderado", { angle: shoulderElevation });
-
-      if ((trunkLean ?? 0) > 20) addEvent("Trunk compensation", "alto", { angle: trunkLean });
-      else if ((trunkLean ?? 0) > 10) addEvent("Trunk warning", "moderado", { angle: trunkLean });
-
-      updateMetricsUI();
+      let biomechRisk = "Baixo";
+      if ((state.metrics.neckAngle ?? 0) > 15 || (state.metrics.shoulderElevation ?? 0) > 45 || (state.metrics.trunkLean ?? 0) > 10) {
+        biomechRisk = "Moderado";
+      }
+      if ((state.metrics.neckAngle ?? 0) > 25 || (state.metrics.shoulderElevation ?? 0) > 70 || (state.metrics.trunkLean ?? 0) > 20) {
+        biomechRisk = "Alto";
+      }
+      state.metrics.biomechRisk = biomechRisk;
     }
 
-    function animateAvatarFromPose(keypoints){
-      if (!state.avatarReady) return;
-      const kp = getKPMap(keypoints);
+    function computeAffect(face) {
+      if (!face || !face.keypoints || face.keypoints.length < 300) {
+        state.metrics.facialEffortScore = null;
+        state.metrics.discomfortScore = null;
+        state.metrics.affectiveLabel = "-";
+        return;
+      }
 
+      const k = face.keypoints;
+
+      const browInnerLeft = k[55];
+      const browOuterLeft = k[65];
+      const browInnerRight = k[285];
+      const browOuterRight = k[295];
+      const upperLip = k[13];
+      const lowerLip = k[14];
+      const leftEyeTop = k[159];
+      const leftEyeBottom = k[145];
+      const rightEyeTop = k[386];
+      const rightEyeBottom = k[374];
+
+      let browTension = 0;
+      let mouthCompression = 0;
+      let eyeCompression = 0;
+
+      if (browInnerLeft && browOuterLeft && browInnerRight && browOuterRight) {
+        const leftDelta = browOuterLeft.y - browInnerLeft.y;
+        const rightDelta = browOuterRight.y - browInnerRight.y;
+        browTension = Math.max(0, -(leftDelta + rightDelta) * 0.5);
+      }
+
+      if (upperLip && lowerLip) {
+        const mouthOpen = Math.abs(lowerLip.y - upperLip.y);
+        mouthCompression = Math.max(0, 8 - mouthOpen);
+      }
+
+      if (leftEyeTop && leftEyeBottom && rightEyeTop && rightEyeBottom) {
+        const leftOpen = Math.abs(leftEyeBottom.y - leftEyeTop.y);
+        const rightOpen = Math.abs(rightEyeBottom.y - rightEyeTop.y);
+        const avgEye = (leftOpen + rightOpen) * 0.5;
+        eyeCompression = Math.max(0, 6 - avgEye);
+      }
+
+      const facialEffortScore = clamp((browTension * 0.8) + (mouthCompression * 0.5) + (eyeCompression * 0.6), 0, 10);
+      const discomfortScore = clamp((facialEffortScore / 10) * 4, 0, 4);
+
+      state.smooth.affect = ema(state.smooth.affect, discomfortScore, 0.25);
+
+      state.metrics.facialEffortScore = facialEffortScore;
+      state.metrics.discomfortScore = state.smooth.affect;
+
+      let label = "Relaxado";
+      if ((state.metrics.discomfortScore ?? 0) >= 1.5) label = "Esforço";
+      if ((state.metrics.discomfortScore ?? 0) >= 2.5) label = "Desconforto";
+      if ((state.metrics.discomfortScore ?? 0) >= 3.3) label = "Dor provável";
+
+      state.metrics.affectiveLabel = label;
+    }
+
+    function fuseRisk() {
+      const b = state.metrics.biomechRisk;
+      const d = state.metrics.discomfortScore ?? 0;
+
+      let composite = "Baixo";
+      if (b === "Moderado" || d >= 1.5) composite = "Moderado";
+      if (b === "Alto" || d >= 3) composite = "Alto";
+
+      state.metrics.compositeRisk = composite;
+
+      if (b === "Alto" && d >= 2.5) {
+        addEvent("Alto risco biomecânico com desconforto facial", "alto");
+      } else if (b === "Moderado" && d >= 1.5) {
+        addEvent("Risco combinado moderado", "moderado");
+      }
+    }
+
+    function animateAvatar(keypoints) {
+      if (!state.avatarReady) return;
+
+      const kp = getKPMap(keypoints);
       const b = state.bones;
 
-      if (b.neck && isVisible(kp.nose) && isVisible(kp.left_shoulder) && isVisible(kp.right_shoulder)){
+      if (b.neck && isVisible(kp.nose) && isVisible(kp.left_shoulder) && isVisible(kp.right_shoulder)) {
         const ls = kp.left_shoulder;
         const rs = kp.right_shoulder;
         const sm = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
         const headDir = angleLine(sm, kp.nose);
-        b.neck.rotation.z = THREE.MathUtils.degToRad(-(headDir + 90) * 0.25);
+        b.neck.rotation.z = THREE.MathUtils.degToRad(-(headDir + 90) * 0.22);
       }
 
-      if (b.head && isVisible(kp.nose) && isVisible(kp.left_shoulder) && isVisible(kp.right_shoulder)){
+      if (b.head && isVisible(kp.nose) && isVisible(kp.left_shoulder) && isVisible(kp.right_shoulder)) {
         const ls = kp.left_shoulder;
         const rs = kp.right_shoulder;
         const sm = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
         const headDir = angleLine(sm, kp.nose);
-        b.head.rotation.z = THREE.MathUtils.degToRad(-(headDir + 90) * 0.35);
+        b.head.rotation.z = THREE.MathUtils.degToRad(-(headDir + 90) * 0.30);
       }
 
-      if (b.upperArmL && isVisible(kp.left_shoulder) && isVisible(kp.left_elbow)){
+      if (b.upperArmL && isVisible(kp.left_shoulder) && isVisible(kp.left_elbow)) {
         const a = angleLine(kp.left_shoulder, kp.left_elbow);
-        b.upperArmL.rotation.z = THREE.MathUtils.degToRad(-a * 0.6);
+        b.upperArmL.rotation.z = THREE.MathUtils.degToRad(-a * 0.55);
       }
 
-      if (b.forearmL && isVisible(kp.left_shoulder) && isVisible(kp.left_elbow) && isVisible(kp.left_wrist)){
+      if (b.forearmL && isVisible(kp.left_shoulder) && isVisible(kp.left_elbow) && isVisible(kp.left_wrist)) {
         const elbow = angleABC(kp.left_shoulder, kp.left_elbow, kp.left_wrist);
-        if (elbow != null) b.forearmL.rotation.z = THREE.MathUtils.degToRad((180 - elbow) * 0.7);
+        if (elbow != null) b.forearmL.rotation.z = THREE.MathUtils.degToRad((180 - elbow) * 0.55);
       }
 
-      if (b.upperArmR && isVisible(kp.right_shoulder) && isVisible(kp.right_elbow)){
+      if (b.upperArmR && isVisible(kp.right_shoulder) && isVisible(kp.right_elbow)) {
         const a = angleLine(kp.right_shoulder, kp.right_elbow);
-        b.upperArmR.rotation.z = THREE.MathUtils.degToRad(-a * 0.6);
+        b.upperArmR.rotation.z = THREE.MathUtils.degToRad(-a * 0.55);
       }
 
-      if (b.forearmR && isVisible(kp.right_shoulder) && isVisible(kp.right_elbow) && isVisible(kp.right_wrist)){
+      if (b.forearmR && isVisible(kp.right_shoulder) && isVisible(kp.right_elbow) && isVisible(kp.right_wrist)) {
         const elbow = angleABC(kp.right_shoulder, kp.right_elbow, kp.right_wrist);
-        if (elbow != null) b.forearmR.rotation.z = THREE.MathUtils.degToRad(-(180 - elbow) * 0.7);
+        if (elbow != null) b.forearmR.rotation.z = THREE.MathUtils.degToRad(-(180 - elbow) * 0.55);
       }
 
-      if (b.thighL && isVisible(kp.left_hip) && isVisible(kp.left_knee)){
-        const a = angleLine(kp.left_hip, kp.left_knee);
-        b.thighL.rotation.z = THREE.MathUtils.degToRad(-a * 0.15);
+      if (b.spineHigh && state.metrics.trunkLean != null) {
+        b.spineHigh.rotation.z = THREE.MathUtils.degToRad(state.metrics.trunkLean * 0.10);
       }
-
-      if (b.shinL && isVisible(kp.left_hip) && isVisible(kp.left_knee) && isVisible(kp.left_ankle)){
-        const knee = angleABC(kp.left_hip, kp.left_knee, kp.left_ankle);
-        if (knee != null) b.shinL.rotation.z = THREE.MathUtils.degToRad((180 - knee) * 0.25);
-      }
-
-      if (b.thighR && isVisible(kp.right_hip) && isVisible(kp.right_knee)){
-        const a = angleLine(kp.right_hip, kp.right_knee);
-        b.thighR.rotation.z = THREE.MathUtils.degToRad(-a * 0.15);
-      }
-
-      if (b.shinR && isVisible(kp.right_hip) && isVisible(kp.right_knee) && isVisible(kp.right_ankle)){
-        const knee = angleABC(kp.right_hip, kp.right_knee, kp.right_ankle);
-        if (knee != null) b.shinR.rotation.z = THREE.MathUtils.degToRad(-(180 - knee) * 0.25);
+      if (b.spineMid && state.metrics.trunkLean != null) {
+        b.spineMid.rotation.z = THREE.MathUtils.degToRad(state.metrics.trunkLean * 0.08);
       }
     }
 
-    function captureFrameData(keypoints){
-      const m = state.metrics;
+    function heatColor(value, warnThreshold, dangerThreshold) {
+      if (value == null) return "#22c55e";
+      if (value >= dangerThreshold) return "#ef4444";
+      if (value >= warnThreshold) return "#facc15";
+      return "#22c55e";
+    }
+
+    function applySegmentHeatmap() {
+      ui.heatHead.setAttribute("color", heatColor(state.metrics.neckAngle, 15, 25));
+      ui.heatShoulderL.setAttribute("color", heatColor(state.metrics.shoulderElevation, 45, 70));
+      ui.heatShoulderR.setAttribute("color", heatColor(state.metrics.shoulderElevation, 45, 70));
+      ui.heatTrunk.setAttribute("color", heatColor(state.metrics.trunkLean, 10, 20));
+    }
+
+    function captureFrame() {
       const t = Date.now();
+
       state.frames.push({
         timestamp: new Date(t).toISOString(),
         t,
-        neckAngle: m.neckAngle,
-        shoulderElevation: m.shoulderElevation,
-        trunkLean: m.trunkLean,
-        symmetryScore: m.symmetryScore,
-        riskLevel: m.riskLevel,
-        keypoints: keypoints.map(k => ({
-          name: k.name,
-          x: +k.x.toFixed(2),
-          y: +k.y.toFixed(2),
-          score: k.score == null ? null : +k.score.toFixed(4)
-        }))
+        protocol: state.protocol,
+        neckAngle: state.metrics.neckAngle,
+        shoulderElevation: state.metrics.shoulderElevation,
+        trunkLean: state.metrics.trunkLean,
+        symmetryScore: state.metrics.symmetryScore,
+        biomechRisk: state.metrics.biomechRisk,
+        facialEffortScore: state.metrics.facialEffortScore,
+        discomfortScore: state.metrics.discomfortScore,
+        affectiveLabel: state.metrics.affectiveLabel,
+        compositeRisk: state.metrics.compositeRisk
       });
 
-      ui.timeline.max = Math.max(0, state.frames.length - 1);
-      ui.timeline.value = state.frames.length - 1;
-      ui.frameCountValue.textContent = String(state.frames.length);
+      if (state.frames.length > 6000) state.frames.shift();
 
-      if (state.sessionStartTs){
-        const sec = Math.floor((t - state.sessionStartTs) / 1000);
-        const mm = String(Math.floor(sec / 60)).padStart(2,"0");
-        const ss = String(sec % 60).padStart(2,"0");
+      ui.timeline.max = Math.max(0, state.frames.length - 1);
+      ui.timeline.value = Math.max(0, state.frames.length - 1);
+
+      if (state.sessionStartAt) {
+        const sec = Math.floor((t - state.sessionStartAt) / 1000);
+        const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+        const ss = String(sec % 60).padStart(2, "0");
         ui.timeLabel.textContent = `${mm}:${ss}`;
       }
     }
 
-    function scrubFrame(index){
+    function scrubFrame(index) {
       const frame = state.frames[index];
       if (!frame) return;
 
+      ui.ghostRoot.setAttribute("visible", true);
+
+      const neck = frame.neckAngle ?? 0;
+      const shoulder = frame.shoulderElevation ?? 0;
+
+      ui.ghostHead.object3D.position.set(0, 1.50 + (neck / 300), 0);
+      ui.ghostLHand.object3D.position.set(-0.24, 1.06 + (shoulder / 260), 0);
+      ui.ghostRHand.object3D.position.set(0.24, 1.06 + (shoulder / 260), 0);
+
       ui.timeLabel.textContent = new Date(frame.t).toLocaleTimeString("pt-BR");
-      ui.neckValue.textContent = frame.neckAngle == null ? "-" : `${frame.neckAngle.toFixed(1)}°`;
-      ui.shoulderValue.textContent = frame.shoulderElevation == null ? "-" : `${frame.shoulderElevation.toFixed(1)}°`;
-      ui.trunkValue.textContent = frame.trunkLean == null ? "-" : `${frame.trunkLean.toFixed(1)}°`;
-      ui.symmetryValue.textContent = frame.symmetryScore == null ? "-" : `${frame.symmetryScore.toFixed(0)}%`;
     }
 
-    async function processLoop(){
-      if (!state.sessionActive || !state.detector || !state.cameraReady){
-        state.rafId = requestAnimationFrame(processLoop);
+    function setupProtocol() {
+      state.protocol = ui.protocolSelect.value;
+      state.protocolSteps = protocols[state.protocol];
+      state.protocolIndex = 0;
+      state.protocolStepEndAt = null;
+      ui.stepText.textContent = "Pronto para iniciar o protocolo.";
+      ui.countdown.textContent = "--";
+    }
+
+    function startProtocolFlow() {
+      if (!state.protocolSteps.length) setupProtocol();
+      state.protocolIndex = 0;
+      advanceProtocolStep();
+    }
+
+    function advanceProtocolStep() {
+      if (!state.sessionActive) return;
+
+      if (state.protocolIndex >= state.protocolSteps.length) {
+        ui.stepText.textContent = "Protocolo concluído.";
+        ui.countdown.textContent = "00";
+        addEvent("Protocolo concluído", "info");
         return;
       }
 
-      try{
-        if (ui.hiddenVideo.readyState >= 2){
-          resizeCanvas();
-          ctx.clearRect(0,0,ui.overlayCanvas.width,ui.overlayCanvas.height);
+      const step = state.protocolSteps[state.protocolIndex];
+      ui.stepText.textContent = step.label;
+      state.protocolStepEndAt = Date.now() + step.seconds * 1000;
+      addEvent("Etapa do protocolo", "info", { step: step.label });
+    }
 
-          const poses = await state.detector.estimatePoses(ui.hiddenVideo, {
-            maxPoses: 1,
-            flipHorizontal: false
+    function updateProtocolCountdown() {
+      if (!state.sessionActive || !state.protocolStepEndAt) return;
+
+      const ms = state.protocolStepEndAt - Date.now();
+      const sec = Math.max(0, Math.ceil(ms / 1000));
+      ui.countdown.textContent = String(sec).padStart(2, "0");
+
+      if (ms <= 0) {
+        state.protocolIndex += 1;
+        advanceProtocolStep();
+      }
+    }
+
+    function updateUI() {
+      ui.neckValue.textContent = round1(state.metrics.neckAngle);
+      ui.shoulderValue.textContent = round1(state.metrics.shoulderElevation);
+      ui.trunkValue.textContent = round1(state.metrics.trunkLean);
+      ui.affectValue.textContent = state.metrics.discomfortScore == null ? "-" : state.metrics.discomfortScore.toFixed(1);
+
+      ui.neckState.textContent =
+        state.metrics.neckAngle == null ? "Sem leitura" :
+        state.metrics.neckAngle > 25 ? "Risco cervical" :
+        state.metrics.neckAngle > 15 ? "Atenção cervical" : "Estável";
+
+      ui.shoulderState.textContent =
+        state.metrics.shoulderElevation == null ? "Sem leitura" :
+        state.metrics.shoulderElevation > 70 ? "Risco de sobrecarga" :
+        state.metrics.shoulderElevation > 45 ? "Atenção" : "Estável";
+
+      ui.trunkState.textContent =
+        state.metrics.trunkLean == null ? "Sem leitura" :
+        state.metrics.trunkLean > 20 ? "Compensação importante" :
+        state.metrics.trunkLean > 10 ? "Atenção" : "Estável";
+
+      ui.affectState.textContent = state.metrics.affectiveLabel;
+
+      ui.sessionBadge.textContent = state.sessionActive ? "Sessão: ativa" : "Sessão: inativa";
+      ui.riskBadge.textContent = `Risco: ${state.metrics.compositeRisk}`;
+      ui.affectBadge.textContent = `Afetivo: ${state.metrics.affectiveLabel}`;
+
+      ui.xrLine1.setAttribute("value", `Neck: ${round1(state.metrics.neckAngle)}`);
+      ui.xrLine2.setAttribute("value", `Shoulder: ${round1(state.metrics.shoulderElevation)}`);
+      ui.xrLine3.setAttribute("value", `Trunk: ${round1(state.metrics.trunkLean)}`);
+      ui.xrLine4.setAttribute("value", `Affect: ${state.metrics.affectiveLabel}`);
+      ui.xrLine5.setAttribute("value", `Composite: ${state.metrics.compositeRisk}`);
+    }
+
+    function generateReport() {
+      if (!state.frames.length) {
+        state.report = null;
+        ui.reportRisk.textContent = "-";
+        ui.reportText.textContent = "Sem dados suficientes.";
+        return;
+      }
+
+      const values = (field) => state.frames.map(f => f[field]).filter(v => typeof v === "number" && !Number.isNaN(v));
+      const avg = (arr) => arr.length ? arr.reduce((a,b)=>a+b,0) / arr.length : null;
+      const max = (arr) => arr.length ? Math.max(...arr) : null;
+
+      const neck = values("neckAngle");
+      const shoulder = values("shoulderElevation");
+      const trunk = values("trunkLean");
+      const affect = values("discomfortScore");
+
+      const report = {
+        protocol: state.protocol,
+        durationSeconds: state.sessionStartAt ? Math.round((Date.now() - state.sessionStartAt) / 1000) : 0,
+        avgNeck: avg(neck),
+        maxNeck: max(neck),
+        avgShoulder: avg(shoulder),
+        maxShoulder: max(shoulder),
+        avgTrunk: avg(trunk),
+        maxTrunk: max(trunk),
+        avgAffect: avg(affect),
+        maxAffect: max(affect),
+        totalEvents: state.events.length,
+        finalRisk: state.metrics.compositeRisk
+      };
+
+      state.report = report;
+      ui.reportRisk.textContent = report.finalRisk;
+      ui.reportText.textContent =
+        `Protocolo ${report.protocol}. Duração ${report.durationSeconds}s. ` +
+        `Cervical média ${report.avgNeck == null ? "-" : report.avgNeck.toFixed(1)}°, pico ${report.maxNeck == null ? "-" : report.maxNeck.toFixed(1)}°. ` +
+        `Ombro médio ${report.avgShoulder == null ? "-" : report.avgShoulder.toFixed(1)}°, pico ${report.maxShoulder == null ? "-" : report.maxShoulder.toFixed(1)}°. ` +
+        `Tronco médio ${report.avgTrunk == null ? "-" : report.avgTrunk.toFixed(1)}°, pico ${report.maxTrunk == null ? "-" : report.maxTrunk.toFixed(1)}°. ` +
+        `Desconforto facial médio ${report.avgAffect == null ? "-" : report.avgAffect.toFixed(1)}.`;
+    }
+
+    function compareWithPrevious() {
+      const raw = localStorage.getItem("xrClinicalLastReport");
+      if (!raw || !state.report) {
+        ui.compareStatus.textContent = "-";
+        ui.compareText.textContent = "Ainda não há sessão anterior salva localmente.";
+        return;
+      }
+
+      try {
+        state.previousReport = JSON.parse(raw);
+
+        const prev = state.previousReport;
+        const curr = state.report;
+
+        const deltaNeck = (curr.avgNeck ?? 0) - (prev.avgNeck ?? 0);
+        const deltaShoulder = (curr.avgShoulder ?? 0) - (prev.avgShoulder ?? 0);
+        const deltaAffect = (curr.avgAffect ?? 0) - (prev.avgAffect ?? 0);
+
+        let label = "Sem mudança relevante";
+        if (deltaNeck < 0 || deltaShoulder < 0 || deltaAffect < 0) label = "Melhora parcial";
+        if (deltaNeck > 0 || deltaShoulder > 0 || deltaAffect > 0) label = "Atenção";
+
+        ui.compareStatus.textContent = label;
+        ui.compareText.textContent =
+          `Neck Δ ${deltaNeck.toFixed(1)}°, Shoulder Δ ${deltaShoulder.toFixed(1)}°, ` +
+          `Affect Δ ${deltaAffect.toFixed(1)} em relação à última sessão.`;
+      } catch (err) {
+        console.error(err);
+        ui.compareStatus.textContent = "-";
+        ui.compareText.textContent = "Falha ao ler a sessão anterior.";
+      }
+    }
+
+    function saveCurrentReport() {
+      if (!state.report) return;
+      localStorage.setItem("xrClinicalLastReport", JSON.stringify(state.report));
+    }
+
+    async function loop() {
+      if (!state.sessionActive || !state.cameraReady || !state.poseDetector || !state.faceDetector) {
+        state.rafId = requestAnimationFrame(loop);
+        return;
+      }
+
+      ctx.clearRect(0, 0, ui.overlayCanvas.width, ui.overlayCanvas.height);
+
+      try {
+        const poses = await state.poseDetector.estimatePoses(ui.hiddenVideo, { maxPoses: 1, flipHorizontal: false });
+        const faces = await state.faceDetector.estimateFaces(ui.hiddenVideo);
+
+        if (poses[0] && poses[0].keypoints) {
+          const keypoints = poses[0].keypoints;
+          const map = getKPMap(keypoints);
+
+          [
+            ["left_shoulder","right_shoulder"],
+            ["left_shoulder","left_elbow"],
+            ["left_elbow","left_wrist"],
+            ["right_shoulder","right_elbow"],
+            ["right_elbow","right_wrist"],
+            ["left_shoulder","left_hip"],
+            ["right_shoulder","right_hip"],
+            ["left_hip","right_hip"],
+            ["left_hip","left_knee"],
+            ["left_knee","left_ankle"],
+            ["right_hip","right_knee"],
+            ["right_knee","right_ankle"]
+          ].forEach(([a,b]) => {
+            if (map[a] && map[b]) drawSegment(map[a], map[b]);
           });
 
-          if (poses && poses[0] && poses[0].keypoints){
-            const keypoints = poses[0].keypoints;
-            drawPose(keypoints);
-            computeMetrics(keypoints);
-            animateAvatarFromPose(keypoints);
-            captureFrameData(keypoints);
-          }
+          keypoints.forEach(k => {
+            if (isVisible(k)) drawPoint(k.x, k.y, "#00E5FF", 4);
+          });
+
+          computeBiomech(keypoints);
+          animateAvatar(keypoints);
+          applySegmentHeatmap();
         }
-      }catch(err){
+
+        if (faces[0]) {
+          computeAffect(faces[0]);
+          faces[0].keypoints.slice(0, 100).forEach(p => {
+            drawPoint(p.x, p.y, "#FF4FD8", 1.8);
+          });
+        } else {
+          state.metrics.facialEffortScore = null;
+          state.metrics.discomfortScore = null;
+          state.metrics.affectiveLabel = "-";
+        }
+
+        fuseRisk();
+        updateProtocolCountdown();
+        updateUI();
+        captureFrame();
+      } catch (err) {
         console.error(err);
       }
 
-      updateFPS();
-      updateMetricsUI();
-      state.rafId = requestAnimationFrame(processLoop);
+      state.rafId = requestAnimationFrame(loop);
     }
 
-    function startSession(){
-      if (!state.cameraReady){
+    async function startSession() {
+      if (!state.cameraReady) {
         setStatus("Inicie a câmera primeiro.");
         return;
       }
-      if (!state.detector){
-        setStatus("Carregue a IA primeiro.");
+      if (!state.poseDetector || !state.faceDetector) {
+        setStatus("Carregue os modelos primeiro.");
         return;
       }
 
+      state.protocol = ui.protocolSelect.value;
+      state.protocolSteps = protocols[state.protocol];
+      state.protocolIndex = 0;
+      state.protocolStepEndAt = null;
+      state.sessionStartAt = Date.now();
       state.sessionActive = true;
-      state.sessionStartTs = Date.now();
-      setStatus("Sessão iniciada.");
-      addEvent("Session started", "info");
-      setSessionBadge();
 
-      if (!state.rafId){
-        state.rafId = requestAnimationFrame(processLoop);
+      addEvent("Sessão iniciada", "info", { protocol: state.protocol });
+      startProtocolFlow();
+      setStatus("Sessão iniciada.");
+      loop();
+    }
+
+    function stopSession() {
+      state.sessionActive = false;
+      addEvent("Sessão encerrada", "info", { protocol: state.protocol });
+      generateReport();
+      saveCurrentReport();
+      compareWithPrevious();
+      setStatus("Sessão encerrada.");
+    }
+
+    function startProtocolFlow() {
+      if (!state.protocolSteps.length) setupProtocol();
+      state.protocolIndex = 0;
+      advanceProtocolStep();
+    }
+
+    function advanceProtocolStep() {
+      if (!state.sessionActive) return;
+
+      if (state.protocolIndex >= state.protocolSteps.length) {
+        ui.stepText.textContent = "Protocolo concluído.";
+        ui.countdown.textContent = "00";
+        addEvent("Protocolo concluído", "info");
+        return;
+      }
+
+      const step = state.protocolSteps[state.protocolIndex];
+      ui.stepText.textContent = step.label;
+      state.protocolStepEndAt = Date.now() + step.seconds * 1000;
+      addEvent("Etapa do protocolo", "info", { step: step.label });
+    }
+
+    function updateProtocolCountdown() {
+      if (!state.sessionActive || !state.protocolStepEndAt) return;
+
+      const ms = state.protocolStepEndAt - Date.now();
+      const sec = Math.max(0, Math.ceil(ms / 1000));
+      ui.countdown.textContent = String(sec).padStart(2, "0");
+
+      if (ms <= 0) {
+        state.protocolIndex += 1;
+        advanceProtocolStep();
       }
     }
 
-    function stopSession(){
-      state.sessionActive = false;
-      setStatus("Sessão encerrada.");
-      addEvent("Session ended", "info");
-      setSessionBadge();
+    function setupProtocol() {
+      state.protocol = ui.protocolSelect.value;
+      state.protocolSteps = protocols[state.protocol];
+      state.protocolIndex = 0;
+      state.protocolStepEndAt = null;
+      ui.stepText.textContent = "Pronto para iniciar o protocolo.";
+      ui.countdown.textContent = "--";
     }
 
-    function resetAll(){
+    function resetAll() {
       stopSession();
       state.frames = [];
       state.events = [];
+      state.report = null;
+      state.lastEventAt = {};
+      state.sessionStartAt = null;
       state.metrics = {
         neckAngle: null,
         shoulderElevation: null,
         trunkLean: null,
         symmetryScore: null,
-        riskLevel: "-"
+        biomechRisk: "Baixo",
+        facialEffortScore: null,
+        discomfortScore: null,
+        affectiveLabel: "-",
+        compositeRisk: "-"
       };
-      state.lastEventTs = {};
-      renderEventList();
-      updateMetricsUI();
+      state.smooth = {
+        neck: null,
+        shoulder: null,
+        trunk: null,
+        affect: null
+      };
+
       ui.timeline.max = 0;
       ui.timeline.value = 0;
       ui.timeLabel.textContent = "00:00";
-      ctx.clearRect(0,0,ui.overlayCanvas.width,ui.overlayCanvas.height);
+      ui.reportRisk.textContent = "-";
+      ui.reportText.textContent = "O relatório será gerado ao final da sessão.";
+      ui.ghostRoot.setAttribute("visible", false);
+
+      renderEvents();
+      updateUI();
+      setupProtocol();
+      compareWithPrevious();
       setStatus("Sistema resetado.");
     }
 
-    function exportJSON(){
+    function exportJSON() {
       const payload = {
-        sessionStartedAt: state.sessionStartTs ? new Date(state.sessionStartTs).toISOString() : null,
+        protocol: state.protocol,
+        report: state.report,
         frames: state.frames,
         events: state.events
       };
 
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = "xr_biomechanics_session.json";
+      a.download = "xr_v11_session.json";
       a.click();
+      URL.revokeObjectURL(a.href);
     }
 
-    function exportExcel(){
+    function exportExcel() {
       const wb = XLSX.utils.book_new();
 
       const summary = [{
-        session_start: state.sessionStartTs ? new Date(state.sessionStartTs).toISOString() : "",
+        protocol: state.protocol,
+        session_start: state.sessionStartAt ? new Date(state.sessionStartAt).toISOString() : "",
         total_frames: state.frames.length,
         total_events: state.events.length,
-        latest_risk: state.metrics.riskLevel
+        final_risk: state.metrics.compositeRisk,
+        duration_seconds: state.report?.durationSeconds ?? ""
       }];
 
-      const posture = state.frames.map(f => ({
+      const report = [{
+        avg_neck: state.report?.avgNeck ?? "",
+        max_neck: state.report?.maxNeck ?? "",
+        avg_shoulder: state.report?.avgShoulder ?? "",
+        max_shoulder: state.report?.maxShoulder ?? "",
+        avg_trunk: state.report?.avgTrunk ?? "",
+        max_trunk: state.report?.maxTrunk ?? "",
+        avg_affect: state.report?.avgAffect ?? "",
+        max_affect: state.report?.maxAffect ?? "",
+        total_events: state.report?.totalEvents ?? "",
+        final_risk: state.report?.finalRisk ?? ""
+      }];
+
+      const frameRows = state.frames.map(f => ({
         timestamp: f.timestamp,
+        protocol: f.protocol,
         neck_angle: f.neckAngle,
         shoulder_elevation: f.shoulderElevation,
         trunk_lean: f.trunkLean,
         symmetry_score: f.symmetryScore,
-        risk_level: f.riskLevel
+        biomech_risk: f.biomechRisk,
+        facial_effort_score: f.facialEffortScore,
+        discomfort_score: f.discomfortScore,
+        affective_label: f.affectiveLabel,
+        composite_risk: f.compositeRisk
       }));
 
-      const events = state.events.map(e => ({
+      const eventRows = state.events.map(e => ({
         timestamp: e.timestamp,
+        protocol: e.protocol,
         type: e.type,
         severity: e.severity,
-        angle: e.angle ?? "",
+        step: e.step ?? "",
+        value: e.value ?? ""
       }));
 
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "SessionSummary");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(posture), "PostureMetrics");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(events), "Events");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(report), "ClinicalReport");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(frameRows), "FrameData");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(eventRows), "Events");
 
-      XLSX.writeFile(wb, "xr_biomechanics_session.xlsx");
+      XLSX.writeFile(wb, "xr_v11_session.xlsx");
     }
+
+    ui.timeline.addEventListener("input", (e) => {
+      scrubFrame(Number(e.target.value));
+    });
 
     document.getElementById("btnStartCamera").addEventListener("click", startCamera);
     document.getElementById("btnStopCamera").addEventListener("click", stopCamera);
-    document.getElementById("btnLoadModelAI").addEventListener("click", loadAI);
+    document.getElementById("btnLoadModels").addEventListener("click", loadModels);
     document.getElementById("btnStartSession").addEventListener("click", startSession);
     document.getElementById("btnStopSession").addEventListener("click", stopSession);
     document.getElementById("btnReset").addEventListener("click", resetAll);
     document.getElementById("btnExportExcel").addEventListener("click", exportExcel);
     document.getElementById("btnExportJSON").addEventListener("click", exportJSON);
 
-    ui.timeline.addEventListener("input", e => {
-      scrubFrame(Number(e.target.value));
-    });
+    ui.protocolSelect.addEventListener("change", setupProtocol);
 
     document.querySelector("#avatarEntity").addEventListener("model-loaded", () => {
-      setStatus("Modelo 3D carregado.");
-      setTimeout(captureAvatarBones, 300);
-    });
-
-    document.querySelector("#scene").addEventListener("loaded", () => {
-      setStatus("Cena XR pronta.");
-      resizeCanvas();
-      updateMetricsUI();
-      renderEventList();
+      captureAvatarBones();
     });
 
     window.addEventListener("resize", resizeCanvas);
+
+    document.querySelector("#xrScene").addEventListener("loaded", () => {
+      resizeCanvas();
+      setupProtocol();
+      compareWithPrevious();
+      updateUI();
+      renderEvents();
+      setStatus("Cena pronta.");
+    });
   </script>
 </body>
 </html>
