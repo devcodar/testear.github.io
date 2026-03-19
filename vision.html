@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>XR Clinical Lab V13</title>
+
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    :root{
+      --bg: rgba(9, 13, 22, .92);
+      --panel: rgba(13, 20, 34, .94);
+      --line: rgba(255,255,255,.10);
+      --text: #fff;
+      --muted: #cbd5e1;
+      --ok: #22c55e;
+      --warn: #facc15;
+      --danger: #ef4444;
+      --cyan: #00e5ff;
+      --pink: #ff4fd8;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    #topbar {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      z-index: 99999;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn, .select, .badge {
+      background: var(--bg);
+      color: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-size: 13px;
+      box-sizing: border-box;
+      backdrop-filter: blur(12px);
+    }
+
+    .btn { cursor: pointer; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+
+    #app {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      height: 100%;
+    }
+
+    #leftPane, #rightPane {
+      position: relative;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #videoFeed, #overlayCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    #videoFeed {
+      transform: scaleX(-1);
+      background: #000;
+    }
+
+    #overlayCanvas {
+      pointer-events: none;
+    }
+
+    .floating-card {
+      position: absolute;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-sizing: border-box;
+      backdrop-filter: blur(14px);
+      z-index: 50;
+    }
+
+    #statusBox {
+      top: 74px;
+      right: 10px;
+      width: min(420px, calc(100vw - 20px));
+      padding: 14px;
+      position: fixed;
+      z-index: 99998;
+    }
+
+    #leftMetrics, #rightMetrics {
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      padding: 14px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px;
+      background: rgba(255,255,255,.03);
+    }
+
+    .metric .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .metric .value {
+      font-size: 25px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .metric .sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    #protocolBox, #timelineBox, #reportBox, #compareBox {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px;
+      margin-top: 10px;
+      background: rgba(255,255,255,.03);
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    #timeline {
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    #eventList {
+      margin-top: 10px;
+      max-height: 120px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: rgba(255,255,255,.02);
+      font-size: 12px;
+    }
+
+    .evt {
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+
+    .evt:last-child {
+      border-bottom: none;
+    }
+
+    #hiddenVideo {
+      display: none;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="topbar">
+    <button class="btn" id="btnStartCamera">Iniciar câmera</button>
+    <button class="btn" id="btnStopCamera">Parar câmera</button>
+    <button class="btn" id="btnLoadModels">Carregar modelos</button>
+    <button class="btn" id="btnStartSession">Iniciar sessão</button>
+    <button class="btn" id="btnStopSession">Parar sessão</button>
+    <button class="btn" id="btnReset">Resetar</button>
+    <button class="btn" id="btnExportExcel">Exportar Excel</button>
+    <button class="btn" id="btnExportJSON">Exportar JSON</button>
+
+    <select class="select" id="protocolSelect">
+      <option value="posture">Protocolo postural</option>
+      <option value="cervical">Protocolo cervical</option>
+      <option value="shoulder">Protocolo ombro</option>
+      <option value="trunk">Protocolo tronco</option>
+      <option value="occupational">Protocolo ocupacional</option>
+    </select>
+
+    <span class="badge" id="sessionBadge">Sessão: inativa</span>
+    <span class="badge" id="riskBadge">Risco: -</span>
+    <span class="badge" id="affectBadge">Afetivo: -</span>
+  </div>
+
+  <div id="statusBox" class="floating-card">
+    <strong>Status</strong>
+    <div id="statusText" style="margin-top:6px;">Aguardando inicialização.</div>
+    <div class="muted" style="margin-top:8px;">
+      Fluxo: câmera → modelos → sessão → protocolo → relatório.
+    </div>
+  </div>
+
+  <div id="app">
+    <div id="leftPane">
+      <video id="videoFeed" autoplay playsinline muted></video>
+      <canvas id="overlayCanvas"></canvas>
+
+      <div id="leftMetrics" class="floating-card">
+        <strong>Corpo + face em tempo real</strong>
+
+        <div class="metrics-grid">
+          <div class="metric">
+            <div class="label">Ângulo cervical</div>
+            <div class="value" id="neckValue">-</div>
+            <div class="sub" id="neckState">Sem leitura</div>
+          </div>
+
+          <div class="metric">
+            <div class="label">Elevação de ombro</div>
+            <div class="value" id="shoulderValue">-</div>
+            <div class="sub" id="shoulderState">Sem leitura</div>
+          </div>
+
+          <div class="metric">
+            <div class="label">Inclinação do tronco</div>
+            <div class="value" id="trunkValue">-</div>
+            <div class="sub" id="trunkState">Sem leitura</div>
+          </div>
+
+          <div class="metric">
+            <div class="label">Desconforto facial</div>
+            <div class="value" id="affectValue">-</div>
+            <div class="sub" id="affectState">Sem leitura</div>
+          </div>
+        </div>
+
+        <div id="protocolBox">
+          <div class="row">
+            <strong>Protocolo guiado</strong>
+            <span id="countdown">--</span>
+          </div>
+          <div style="margin-top:8px;" id="stepText">Selecione um protocolo e inicie a sessão.</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="rightPane">
+      <a-scene id="xrScene" embedded renderer="colorManagement:true" background="color:#09111d">
+        <a-assets>
+          <a-asset-item id="humanModel" src="human_malefemale_basemesh_rigged.glb"></a-asset-item>
+        </a-assets>
+
+        <a-light type="ambient" intensity="0.7"></a-light>
+        <a-light type="directional" position="1 3 2" intensity="0.95"></a-light>
+
+        <a-plane rotation="-90 0 0" width="24" height="24" color="#162033"></a-plane>
+
+        <a-entity id="avatarRoot" position="0 0 -2.25" rotation="0 180 0">
+          <a-entity id="avatarEntity" gltf-model="#humanModel"></a-entity>
+
+          <a-sphere id="heatHead" radius="0.06" position="0 1.58 0.02" color="#22c55e" opacity="0.65"></a-sphere>
+          <a-sphere id="heatShoulderL" radius="0.055" position="-0.18 1.36 0.02" color="#22c55e" opacity="0.6"></a-sphere>
+          <a-sphere id="heatShoulderR" radius="0.055" position="0.18 1.36 0.02" color="#22c55e" opacity="0.6"></a-sphere>
+          <a-sphere id="heatTrunk" radius="0.09" position="0 1.08 0.02" color="#22c55e" opacity="0.45"></a-sphere>
+        </a-entity>
+
+        <a-entity id="ghostRoot" visible="false" position="0 0 -2.25">
+          <a-sphere id="ghostHead" radius="0.05" color="#00e5ff" opacity="0.22" position="0 1.55 0"></a-sphere>
+          <a-sphere id="ghostLHand" radius="0.04" color="#ff4fd8" opacity="0.18" position="-0.22 1.12 0"></a-sphere>
+          <a-sphere id="ghostRHand" radius="0.04" color="#ffd84d" opacity="0.18" position="0.22 1.12 0"></a-sphere>
+        </a-entity>
+
+        <a-entity id="xrPanel" position="0 1.45 -1.15">
+          <a-plane width="1.62" height="0.96" color="#0b1220" material="shader:flat;opacity:0.9"></a-plane>
+          <a-text value="XR Clinical Fusion" align="center" position="0 0.31 0.01" color="#ffffff" width="1.8"></a-text>
+          <a-text id="xrLine1" value="Neck: -" align="left" position="-0.66 0.12 0.01" color="#cbd5e1" width="1.45"></a-text>
+          <a-text id="xrLine2" value="Shoulder: -" align="left" position="-0.66 -0.02 0.01" color="#cbd5e1" width="1.45"></a-text>
+          <a-text id="xrLine3" value="Trunk: -" align="left" position="-0.66 -0.16 0.01" color="#cbd5e1" width="1.45"></a-text>
+          <a-text id="xrLine4" value="Affect: -" align="left" position="-0.66 -0.30 0.01" color="#cbd5e1" width="1.45"></a-text>
+          <a-text id="xrLine5" value="Composite: -" align="left" position="-0.66 -0.44 0.01" color="#cbd5e1" width="1.45"></a-text>
+        </a-entity>
+
+        <a-camera position="0 1.6 0"></a-camera>
+      </a-scene>
+
+      <div id="rightMetrics" class="floating-card">
+        <strong>Digital twin + relatório</strong>
+
+        <div id="timelineBox">
+          <div class="row">
+            <strong>Timeline</strong>
+            <span id="timeLabel">00:00</span>
+          </div>
+          <input id="timeline" type="range" min="0" max="0" value="0" step="1" />
+          <div id="eventList"></div>
+        </div>
+
+        <div id="reportBox">
+          <div class="row">
+            <strong>Resumo clínico</strong>
+            <span id="reportRisk">-</span>
+          </div>
+          <div style="margin-top:8px;font-size:13px;color:var(--muted);" id="reportText">
+            O relatório será gerado ao final da sessão.
+          </div>
+        </div>
+
+        <div id="compareBox">
+          <div class="row">
+            <strong>Comparação com última sessão</strong>
+            <span id="compareStatus">-</span>
+          </div>
+          <div style="margin-top:8px;font-size:13px;color:var(--muted);" id="compareText">
+            Ainda não há sessão anterior salva localmente.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <video id="hiddenVideo" autoplay playsinline muted></video>
+
+  <script>
+    const state = {
+      stream: null,
+      poseDetector: null,
+      faceDetector: null,
+      cameraReady: false,
+      avatarReady: false,
+      avatarMesh: null,
+      bones: {},
+      sessionActive: false,
+      protocol: "posture",
+      protocolSteps: [],
+      protocolIndex: 0,
+      protocolStepEndAt: null,
+      lastEventAt: {},
+      sessionStartAt: null,
+      frames: [],
+      events: [],
+      report: null,
+      previousReport: null,
+      smooth: {
+        neck: null,
+        shoulder: null,
+        trunk: null,
+        affect: null
+      },
+      metrics: {
+        neckAngle: null,
+        shoulderElevation: null,
+        trunkLean: null,
+        symmetryScore: null,
+        biomechRisk: "Baixo",
+        facialEffortScore: null,
+        discomfortScore: null,
+        affectiveLabel: "-",
+        compositeRisk: "-"
+      },
+      rafId: null
+    };
+
+    const protocols = {
+      posture: [
+        { label: "Posicione-se em pé em postura neutra", seconds: 5 },
+        { label: "Mantenha cabeça e ombros alinhados", seconds: 5 },
+        { label: "Mantenha tronco estável", seconds: 5 },
+        { label: "Finalize em postura neutra", seconds: 4 }
+      ],
+      cervical: [
+        { label: "Posição neutra cervical", seconds: 4 },
+        { label: "Projete levemente a cabeça à frente", seconds: 5 },
+        { label: "Mantenha a posição", seconds: 5 },
+        { label: "Retorne ao neutro", seconds: 4 }
+      ],
+      shoulder: [
+        { label: "Posição neutra", seconds: 4 },
+        { label: "Eleve lentamente um braço", seconds: 6 },
+        { label: "Mantenha o braço elevado", seconds: 5 },
+        { label: "Retorne ao neutro", seconds: 4 }
+      ],
+      trunk: [
+        { label: "Posição neutra", seconds: 4 },
+        { label: "Incline levemente o tronco", seconds: 6 },
+        { label: "Mantenha a inclinação", seconds: 5 },
+        { label: "Retorne ao neutro", seconds: 4 }
+      ],
+      occupational: [
+        { label: "Posição neutra inicial", seconds: 4 },
+        { label: "Repita o gesto funcional", seconds: 8 },
+        { label: "Mantenha a postura de trabalho", seconds: 6 },
+        { label: "Retorne ao neutro", seconds: 4 }
+      ]
+    };
+
+    const skeletonPairs = [
+      ["nose","left_eye"], ["nose","right_eye"],
+      ["left_shoulder","right_shoulder"],
+      ["left_shoulder","left_elbow"],
+      ["left_elbow","left_wrist"],
+      ["right_shoulder","right_elbow"],
+      ["right_elbow","right_wrist"],
+      ["left_shoulder","left_hip"],
+      ["right_shoulder","right_hip"],
+      ["left_hip","right_hip"],
+      ["left_hip","left_knee"],
+      ["left_knee","left_ankle"],
+      ["right_hip","right_knee"],
+      ["right_knee","right_ankle"]
+    ];
+
+    const ui = {
+      videoFeed: document.getElementById("videoFeed"),
+      hiddenVideo: document.getElementById("hiddenVideo"),
+      overlayCanvas: document.getElementById("overlayCanvas"),
+      protocolSelect: document.getElementById("protocolSelect"),
+      sessionBadge: document.getElementById("sessionBadge"),
+      riskBadge: document.getElementById("riskBadge"),
+      affectBadge: document.getElementById("affectBadge"),
+      statusText: document.getElementById("statusText"),
+      neckValue: document.getElementById("neckValue"),
+      shoulderValue: document.getElementById("shoulderValue"),
+      trunkValue: document.getElementById("trunkValue"),
+      affectValue: document.getElementById("affectValue"),
+      neckState: document.getElementById("neckState"),
+      shoulderState: document.getElementById("shoulderState"),
+      trunkState: document.getElementById("trunkState"),
+      affectState: document.getElementById("affectState"),
+      countdown: document.getElementById("countdown"),
+      stepText: document.getElementById("stepText"),
+      timeline: document.getElementById("timeline"),
+      timeLabel: document.getElementById("timeLabel"),
+      eventList: document.getElementById("eventList"),
+      reportRisk: document.getElementById("reportRisk"),
+      reportText: document.getElementById("reportText"),
+      compareStatus: document.getElementById("compareStatus"),
+      compareText: document.getElementById("compareText"),
+      xrLine1: document.getElementById("xrLine1"),
+      xrLine2: document.getElementById("xrLine2"),
+      xrLine3: document.getElementById("xrLine3"),
+      xrLine4: document.getElementById("xrLine4"),
+      xrLine5: document.getElementById("xrLine5"),
+      heatHead: document.getElementById("heatHead"),
+      heatShoulderL: document.getElementById("heatShoulderL"),
+      heatShoulderR: document.getElementById("heatShoulderR"),
+      heatTrunk: document.getElementById("heatTrunk"),
+      ghostRoot: document.getElementById("ghostRoot"),
+      ghostHead: document.getElementById("ghostHead"),
+      ghostLHand: document.getElementById("ghostLHand"),
+      ghostRHand: document.getElementById("ghostRHand")
+    };
+
+    const ctx = ui.overlayCanvas.getContext("2d");
+
+    function setStatus(msg) {
+      ui.statusText.textContent = msg;
+      console.log("[STATUS]", msg);
+    }
+
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function ema(prev, value, alpha = 0.2) {
+      if (value == null || Number.isNaN(value)) return prev;
+      if (prev == null) return value;
+      return prev * (1 - alpha) + value * alpha;
+    }
+
+    function deg(v) {
+      return v == null || Number.isNaN(v) ? null : v * 180 / Math.PI;
+    }
+
+    function round1(v) {
+      return v == null || Number.isNaN(v) ? "-" : `${v.toFixed(1)}°`;
+    }
+
+    function isVisible(kp, min = 0.25) {
+      return !!kp && (kp.score == null || kp.score >= min);
+    }
+
+    function getKPMap(keypoints) {
+      const map = {};
+      keypoints.forEach(k => { map[k.name] = k; });
+      return map;
+    }
+
+    function angleLine(a, b) {
+      return deg(Math.atan2(b.y - a.y, b.x - a.x));
+    }
+
+    function distance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function angleABC(a, b, c) {
+      const abx = a.x - b.x;
+      const aby = a.y - b.y;
+      const cbx = c.x - b.x;
+      const cby = c.y - b.y;
+      const dot = abx * cbx + aby * cby;
+      const mag1 = Math.hypot(abx, aby);
+      const mag2 = Math.hypot(cbx, cby);
+      if (!mag1 || !mag2) return null;
+      const cos = clamp(dot / (mag1 * mag2), -1, 1);
+      return deg(Math.acos(cos));
+    }
+
+    function vec(a, b) {
+      return { x: b.x - a.x, y: b.y - a.y };
+    }
+
+    function vecLength(v) {
+      return Math.sqrt(v.x * v.x + v.y * v.y);
+    }
+
+    function angleBetween(v1, v2) {
+      const dot = v1.x * v2.x + v1.y * v2.y;
+      const mag = vecLength(v1) * vecLength(v2);
+      if (!mag) return 0;
+      return Math.acos(clamp(dot / mag, -1, 1));
+    }
+
+    function resizeCanvas() {
+      const rect = ui.videoFeed.getBoundingClientRect();
+      ui.overlayCanvas.width = Math.max(1, Math.floor(rect.width));
+      ui.overlayCanvas.height = Math.max(1, Math.floor(rect.height));
+    }
+
+    function addEvent(type, severity, details = {}) {
+      const now = Date.now();
+      const key = `${type}_${severity}`;
+      if (state.lastEventAt[key] && now - state.lastEventAt[key] < 1800) return;
+      state.lastEventAt[key] = now;
+
+      state.events.push({
+        timestamp: new Date(now).toISOString(),
+        t: now,
+        protocol: state.protocol,
+        type,
+        severity,
+        ...details
+      });
+
+      if (state.events.length > 500) state.events.shift();
+      renderEvents();
+    }
+
+    function renderEvents() {
+      ui.eventList.innerHTML = "";
+      [...state.events].slice(-12).reverse().forEach(evt => {
+        const div = document.createElement("div");
+        div.className = "evt";
+        div.textContent = `${new Date(evt.t).toLocaleTimeString("pt-BR")} · ${evt.type} · ${evt.severity}`;
+        ui.eventList.appendChild(div);
+      });
+    }
+
+    async function startCamera() {
+      if (state.stream) {
+        setStatus("Câmera já iniciada.");
+        return;
+      }
+
+      try {
+        state.stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+
+        ui.hiddenVideo.srcObject = state.stream;
+        ui.videoFeed.srcObject = state.stream;
+
+        await ui.hiddenVideo.play();
+        await ui.videoFeed.play();
+
+        state.cameraReady = true;
+        resizeCanvas();
+        setStatus("Câmera iniciada.");
+      } catch (err) {
+        console.error(err);
+        setStatus("Falha ao iniciar a câmera.");
+      }
+    }
+
+    function stopCamera() {
+      if (!state.stream) return;
+      state.stream.getTracks().forEach(track => track.stop());
+      state.stream = null;
+      state.cameraReady = false;
+      ui.hiddenVideo.srcObject = null;
+      ui.videoFeed.srcObject = null;
+      setStatus("Câmera parada.");
+    }
+
+    async function loadModels() {
+      try {
+        await tf.ready();
+
+        state.poseDetector = await poseDetection.createDetector(
+          poseDetection.SupportedModels.BlazePose,
+          { runtime: "tfjs", modelType: "full" }
+        );
+
+        state.faceDetector = await faceLandmarksDetection.createDetector(
+          faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
+          { runtime: "tfjs" }
+        );
+
+        setStatus("Modelos carregados.");
+      } catch (err) {
+        console.error(err);
+        setStatus("Falha ao carregar modelos.");
+      }
+    }
+
+    function findBone(root, candidates) {
+      let found = null;
+      root.traverse(obj => {
+        if (found || !obj.isBone) return;
+        const name = obj.name.toLowerCase();
+        if (candidates.some(c => name.includes(c))) found = obj;
+      });
+      return found;
+    }
+
+    function captureAvatarBones() {
+      const mesh = document.querySelector("#avatarEntity").getObject3D("mesh");
+      if (!mesh) return;
+
+      state.avatarMesh = mesh;
+      state.bones = {
+        head: findBone(mesh, ["head"]),
+        neck: findBone(mesh, ["neck"]),
+        spine: findBone(mesh, ["spine_fk.002", "spine.003", "spine_03", "spine"]),
+        armL: findBone(mesh, ["upper_arm_fk.l", "upperarm_l", "arm.l", "upper_arm.l"]),
+        elbowL: findBone(mesh, ["forearm_fk.l", "lowerarm_l", "forearm.l", "lower_arm.l"]),
+        armR: findBone(mesh, ["upper_arm_fk.r", "upperarm_r", "arm.r", "upper_arm.r"]),
+        elbowR: findBone(mesh, ["forearm_fk.r", "lowerarm_r", "forearm.r", "lower_arm.r"])
+      };
+
+      state.avatarReady = true;
+      setStatus("Avatar pronto.");
+    }
+
+    function drawPoint(x, y, color = "#00E5FF", r = 4) {
+      const drawX = ui.overlayCanvas.width - (x * ui.overlayCanvas.width / ui.hiddenVideo.videoWidth);
+      const drawY = y * ui.overlayCanvas.height / ui.hiddenVideo.videoHeight;
+      ctx.beginPath();
+      ctx.fillStyle = color;
+      ctx.arc(drawX, drawY, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawSegment(a, b, color = "#00ff88", width = 2) {
+      if (!a || !b) return;
+      const ax = ui.overlayCanvas.width - (a.x * ui.overlayCanvas.width / ui.hiddenVideo.videoWidth);
+      const ay = a.y * ui.overlayCanvas.height / ui.hiddenVideo.videoHeight;
+      const bx = ui.overlayCanvas.width - (b.x * ui.overlayCanvas.width / ui.hiddenVideo.videoWidth);
+      const by = b.y * ui.overlayCanvas.height / ui.hiddenVideo.videoHeight;
+
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+    }
+
+    function drawFullSkeleton(map) {
+      Object.values(map).forEach(p => {
+        if (!p) return;
+        drawPoint(p.x, p.y, "#00e5ff", 4);
+      });
+
+      skeletonPairs.forEach(([a, b]) => {
+        if (map[a] && map[b]) drawSegment(map[a], map[b], "#00ff88", 2);
+      });
+    }
+
+    function computeBiomechRefined(keypoints) {
+      const kp = getKPMap(keypoints);
+
+      let neck = null;
+      let shoulder = null;
+      let trunk = null;
+      let symmetry = null;
+
+      if (kp.nose && kp.left_shoulder && kp.right_shoulder) {
+        const sm = {
+          x: (kp.left_shoulder.x + kp.right_shoulder.x) / 2,
+          y: (kp.left_shoulder.y + kp.right_shoulder.y) / 2
+        };
+        const ref = { x: sm.x, y: sm.y - 100 };
+        neck = angleABC(ref, sm, kp.nose);
+      }
+
+      if (kp.left_shoulder && kp.left_elbow) {
+        shoulder = Math.abs(90 - Math.abs(angleLine(kp.left_shoulder, kp.left_elbow)));
+      }
+      if (kp.right_shoulder && kp.right_elbow) {
+        const r = Math.abs(90 - Math.abs(angleLine(kp.right_shoulder, kp.right_elbow)));
+        shoulder = shoulder == null ? r : Math.max(shoulder, r);
+      }
+
+      if (kp.left_shoulder && kp.left_hip) {
+        trunk = Math.abs(angleLine(kp.left_shoulder, kp.left_hip) + 90);
+      }
+
+      if (kp.left_shoulder && kp.right_shoulder && kp.left_wrist && kp.right_wrist) {
+        const leftReach = distance(kp.left_shoulder, kp.left_wrist);
+        const rightReach = distance(kp.right_shoulder, kp.right_wrist);
+        const maxD = Math.max(leftReach, rightReach, 1);
+        symmetry = 100 - (Math.abs(leftReach - rightReach) / maxD) * 100;
+      }
+
+      state.smooth.neck = ema(state.smooth.neck, neck, 0.22);
+      state.smooth.shoulder = ema(state.smooth.shoulder, shoulder, 0.22);
+      state.smooth.trunk = ema(state.smooth.trunk, trunk, 0.22);
+
+      state.metrics.neckAngle = state.smooth.neck;
+      state.metrics.shoulderElevation = state.smooth.shoulder;
+      state.metrics.trunkLean = state.smooth.trunk;
+      state.metrics.symmetryScore = symmetry;
+
+      let risk = "Baixo";
+      if ((state.metrics.neckAngle ?? 0) > 15 || (state.metrics.shoulderElevation ?? 0) > 40) risk = "Moderado";
+      if ((state.metrics.neckAngle ?? 0) > 25 || (state.metrics.shoulderElevation ?? 0) > 70 || (state.metrics.trunkLean ?? 0) > 15) risk = "Alto";
+      state.metrics.biomechRisk = risk;
+    }
+
+    function computeAffect(face) {
+      if (!face || !face.keypoints || face.keypoints.length < 300) {
+        state.metrics.facialEffortScore = null;
+        state.metrics.discomfortScore = null;
+        state.metrics.affectiveLabel = "-";
+        return;
+      }
+
+      const k = face.keypoints;
+      const browInnerLeft = k[55];
+      const browOuterLeft = k[65];
+      const browInnerRight = k[285];
+      const browOuterRight = k[295];
+      const upperLip = k[13];
+      const lowerLip = k[14];
+      const leftEyeTop = k[159];
+      const leftEyeBottom = k[145];
+      const rightEyeTop = k[386];
+      const rightEyeBottom = k[374];
+
+      let browTension = 0;
+      let mouthCompression = 0;
+      let eyeCompression = 0;
+
+      if (browInnerLeft && browOuterLeft && browInnerRight && browOuterRight) {
+        const leftDelta = browOuterLeft.y - browInnerLeft.y;
+        const rightDelta = browOuterRight.y - browInnerRight.y;
+        browTension = Math.max(0, -(leftDelta + rightDelta) * 0.5);
+      }
+
+      if (upperLip && lowerLip) {
+        const mouthOpen = Math.abs(lowerLip.y - upperLip.y);
+        mouthCompression = Math.max(0, 8 - mouthOpen);
+      }
+
+      if (leftEyeTop && leftEyeBottom && rightEyeTop && rightEyeBottom) {
+        const leftOpen = Math.abs(leftEyeBottom.y - leftEyeTop.y);
+        const rightOpen = Math.abs(rightEyeBottom.y - rightEyeTop.y);
+        const avgEye = (leftOpen + rightOpen) * 0.5;
+        eyeCompression = Math.max(0, 6 - avgEye);
+      }
+
+      const facialEffortScore = clamp((browTension * 0.8) + (mouthCompression * 0.5) + (eyeCompression * 0.6), 0, 10);
+      const discomfortScore = clamp((facialEffortScore / 10) * 4, 0, 4);
+
+      state.smooth.affect = ema(state.smooth.affect, discomfortScore, 0.25);
+
+      state.metrics.facialEffortScore = facialEffortScore;
+      state.metrics.discomfortScore = state.smooth.affect;
+
+      let label = "Relaxado";
+      if ((state.metrics.discomfortScore ?? 0) >= 1.5) label = "Esforço";
+      if ((state.metrics.discomfortScore ?? 0) >= 2.5) label = "Desconforto";
+      if ((state.metrics.discomfortScore ?? 0) >= 3.3) label = "Dor provável";
+
+      state.metrics.affectiveLabel = label;
+    }
+
+    function fuseAdvanced() {
+      const b = state.metrics.biomechRisk;
+      const f = state.metrics.discomfortScore || 0;
+
+      let result = "Baixo";
+      if (b === "Moderado" || f > 1.5) result = "Moderado";
+      if (b === "Alto" || f > 3) result = "Alto";
+
+      state.metrics.compositeRisk = result;
+    }
+
+    function solveIKArm(shoulderKP, elbowKP, wristKP, boneShoulder, boneElbow, side = "L") {
+      if (!shoulderKP || !elbowKP || !wristKP) return;
+      if (!boneShoulder || !boneElbow) return;
+
+      const upper = vec(shoulderKP, elbowKP);
+      const lower = vec(elbowKP, wristKP);
+      const target = vec(shoulderKP, wristKP);
+
+      const angleElbow = angleBetween(upper, lower);
+      const angleShoulder = angleBetween(target, upper);
+
+      const shoulderSign = side === "L" ? 1 : -1;
+      const elbowSign = side === "L" ? 1 : -1;
+
+      boneElbow.rotation.z = elbowSign * angleElbow * 0.75;
+      boneShoulder.rotation.z = shoulderSign * angleShoulder * 0.65;
+
+      const armDir = Math.atan2(upper.y, upper.x);
+      boneShoulder.rotation.x = (side === "L" ? -1 : 1) * armDir * 0.15;
+    }
+
+    function updateHead(map) {
+      if (!state.bones.head || !map.nose || !map.left_shoulder) return;
+      const dx = map.nose.x - map.left_shoulder.x;
+      const dy = map.nose.y - map.left_shoulder.y;
+      state.bones.head.rotation.y = dx * 0.01;
+      state.bones.head.rotation.x = dy * 0.01 * 0.5;
+    }
+
+    function updateSpine(map) {
+      if (!state.bones.spine || !map.left_shoulder || !map.left_hip) return;
+      const dy = map.left_shoulder.y - map.left_hip.y;
+      state.bones.spine.rotation.x = dy * 0.005;
+    }
+
+    function updateArmsIK(map) {
+      solveIKArm(
+        map.left_shoulder,
+        map.left_elbow,
+        map.left_wrist,
+        state.bones.armL,
+        state.bones.elbowL,
+        "L"
+      );
+
+      solveIKArm(
+        map.right_shoulder,
+        map.right_elbow,
+        map.right_wrist,
+        state.bones.armR,
+        state.bones.elbowR,
+        "R"
+      );
+    }
+
+    function updateAvatar(map) {
+      if (!state.avatarReady) return;
+      updateHead(map);
+      updateSpine(map);
+      updateArmsIK(map);
+    }
+
+    function heatColor(value, warnThreshold, dangerThreshold) {
+      if (value == null) return "#22c55e";
+      if (value >= dangerThreshold) return "#ef4444";
+      if (value >= warnThreshold) return "#facc15";
+      return "#22c55e";
+    }
+
+    function applyHeatmapRegional() {
+      ui.heatHead.setAttribute("color", heatColor(state.metrics.neckAngle, 15, 25));
+      ui.heatShoulderL.setAttribute("color", heatColor(state.metrics.shoulderElevation, 40, 70));
+      ui.heatShoulderR.setAttribute("color", heatColor(state.metrics.shoulderElevation, 40, 70));
+      ui.heatTrunk.setAttribute("color", heatColor(state.metrics.trunkLean, 10, 15));
+    }
+
+    function captureFrame() {
+      const t = Date.now();
+
+      state.frames.push({
+        timestamp: new Date(t).toISOString(),
+        t,
+        protocol: state.protocol,
+        neckAngle: state.metrics.neckAngle,
+        shoulderElevation: state.metrics.shoulderElevation,
+        trunkLean: state.metrics.trunkLean,
+        symmetryScore: state.metrics.symmetryScore,
+        biomechRisk: state.metrics.biomechRisk,
+        facialEffortScore: state.metrics.facialEffortScore,
+        discomfortScore: state.metrics.discomfortScore,
+        affectiveLabel: state.metrics.affectiveLabel,
+        compositeRisk: state.metrics.compositeRisk
+      });
+
+      if (state.frames.length > 6000) state.frames.shift();
+      ui.timeline.max = Math.max(0, state.frames.length - 1);
+      ui.timeline.value = Math.max(0, state.frames.length - 1);
+
+      if (state.sessionStartAt) {
+        const sec = Math.floor((t - state.sessionStartAt) / 1000);
+        const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+        const ss = String(sec % 60).padStart(2, "0");
+        ui.timeLabel.textContent = `${mm}:${ss}`;
+      }
+    }
+
+    function scrubFrame(index) {
+      const frame = state.frames[index];
+      if (!frame) return;
+
+      ui.ghostRoot.setAttribute("visible", true);
+      const neck = frame.neckAngle ?? 0;
+      const shoulder = frame.shoulderElevation ?? 0;
+
+      ui.ghostHead.object3D.position.set(0, 1.50 + (neck / 300), 0);
+      ui.ghostLHand.object3D.position.set(-0.24, 1.06 + (shoulder / 260), 0);
+      ui.ghostRHand.object3D.position.set(0.24, 1.06 + (shoulder / 260), 0);
+
+      ui.timeLabel.textContent = new Date(frame.t).toLocaleTimeString("pt-BR");
+    }
+
+    function setupProtocol() {
+      state.protocol = ui.protocolSelect.value;
+      state.protocolSteps = protocols[state.protocol];
+      state.protocolIndex = 0;
+      state.protocolStepEndAt = null;
+      ui.stepText.textContent = "Pronto para iniciar o protocolo.";
+      ui.countdown.textContent = "--";
+    }
+
+    function startProtocolFlow() {
+      if (!state.protocolSteps.length) setupProtocol();
+      state.protocolIndex = 0;
+      advanceProtocolStep();
+    }
+
+    function advanceProtocolStep() {
+      if (!state.sessionActive) return;
+
+      if (state.protocolIndex >= state.protocolSteps.length) {
+        ui.stepText.textContent = "Protocolo concluído.";
+        ui.countdown.textContent = "00";
+        addEvent("Protocolo concluído", "info");
+        return;
+      }
+
+      const step = state.protocolSteps[state.protocolIndex];
+      ui.stepText.textContent = step.label;
+      state.protocolStepEndAt = Date.now() + step.seconds * 1000;
+      addEvent("Etapa do protocolo", "info", { step: step.label });
+    }
+
+    function updateProtocolCountdown() {
+      if (!state.sessionActive || !state.protocolStepEndAt) return;
+
+      const ms = state.protocolStepEndAt - Date.now();
+      const sec = Math.max(0, Math.ceil(ms / 1000));
+      ui.countdown.textContent = String(sec).padStart(2, "0");
+
+      if (ms <= 0) {
+        state.protocolIndex += 1;
+        advanceProtocolStep();
+      }
+    }
+
+    function updateUI() {
+      ui.neckValue.textContent = round1(state.metrics.neckAngle);
+      ui.shoulderValue.textContent = round1(state.metrics.shoulderElevation);
+      ui.trunkValue.textContent = round1(state.metrics.trunkLean);
+      ui.affectValue.textContent = state.metrics.discomfortScore == null ? "-" : state.metrics.discomfortScore.toFixed(1);
+
+      ui.neckState.textContent =
+        state.metrics.neckAngle == null ? "Sem leitura" :
+        state.metrics.neckAngle > 25 ? "Risco cervical" :
+        state.metrics.neckAngle > 15 ? "Atenção cervical" : "Estável";
+
+      ui.shoulderState.textContent =
+        state.metrics.shoulderElevation == null ? "Sem leitura" :
+        state.metrics.shoulderElevation > 70 ? "Risco de sobrecarga" :
+        state.metrics.shoulderElevation > 40 ? "Atenção" : "Estável";
+
+      ui.trunkState.textContent =
+        state.metrics.trunkLean == null ? "Sem leitura" :
+        state.metrics.trunkLean > 15 ? "Compensação importante" :
+        state.metrics.trunkLean > 10 ? "Atenção" : "Estável";
+
+      ui.affectState.textContent = state.metrics.affectiveLabel;
+
+      ui.sessionBadge.textContent = state.sessionActive ? "Sessão: ativa" : "Sessão: inativa";
+      ui.riskBadge.textContent = `Risco: ${state.metrics.compositeRisk}`;
+      ui.affectBadge.textContent = `Afetivo: ${state.metrics.affectiveLabel}`;
+
+      ui.xrLine1.setAttribute("value", `Neck: ${round1(state.metrics.neckAngle)}`);
+      ui.xrLine2.setAttribute("value", `Shoulder: ${round1(state.metrics.shoulderElevation)}`);
+      ui.xrLine3.setAttribute("value", `Trunk: ${round1(state.metrics.trunkLean)}`);
+      ui.xrLine4.setAttribute("value", `Affect: ${state.metrics.affectiveLabel}`);
+      ui.xrLine5.setAttribute("value", `Composite: ${state.metrics.compositeRisk}`);
+    }
+
+    function generateReport() {
+      if (!state.frames.length) {
+        state.report = null;
+        ui.reportRisk.textContent = "-";
+        ui.reportText.textContent = "Sem dados suficientes.";
+        return;
+      }
+
+      const values = (field) => state.frames.map(f => f[field]).filter(v => typeof v === "number" && !Number.isNaN(v));
+      const avg = (arr) => arr.length ? arr.reduce((a,b)=>a+b,0) / arr.length : null;
+      const max = (arr) => arr.length ? Math.max(...arr) : null;
+
+      const neck = values("neckAngle");
+      const shoulder = values("shoulderElevation");
+      const trunk = values("trunkLean");
+      const affect = values("discomfortScore");
+
+      state.report = {
+        protocol: state.protocol,
+        durationSeconds: state.sessionStartAt ? Math.round((Date.now() - state.sessionStartAt) / 1000) : 0,
+        avgNeck: avg(neck),
+        maxNeck: max(neck),
+        avgShoulder: avg(shoulder),
+        maxShoulder: max(shoulder),
+        avgTrunk: avg(trunk),
+        maxTrunk: max(trunk),
+        avgAffect: avg(affect),
+        maxAffect: max(affect),
+        totalEvents: state.events.length,
+        finalRisk: state.metrics.compositeRisk
+      };
+
+      ui.reportRisk.textContent = state.report.finalRisk;
+      ui.reportText.textContent =
+        `Protocolo ${state.report.protocol}. Duração ${state.report.durationSeconds}s. ` +
+        `Cervical média ${state.report.avgNeck == null ? "-" : state.report.avgNeck.toFixed(1)}°, pico ${state.report.maxNeck == null ? "-" : state.report.maxNeck.toFixed(1)}°. ` +
+        `Ombro médio ${state.report.avgShoulder == null ? "-" : state.report.avgShoulder.toFixed(1)}°, pico ${state.report.maxShoulder == null ? "-" : state.report.maxShoulder.toFixed(1)}°. ` +
+        `Tronco médio ${state.report.avgTrunk == null ? "-" : state.report.avgTrunk.toFixed(1)}°, pico ${state.report.maxTrunk == null ? "-" : state.report.maxTrunk.toFixed(1)}°. ` +
+        `Desconforto facial médio ${state.report.avgAffect == null ? "-" : state.report.avgAffect.toFixed(1)}.`;
+    }
+
+    function compareWithPrevious() {
+      const raw = localStorage.getItem("xrClinicalLastReport");
+      if (!raw || !state.report) {
+        ui.compareStatus.textContent = "-";
+        ui.compareText.textContent = "Ainda não há sessão anterior salva localmente.";
+        return;
+      }
+
+      try {
+        state.previousReport = JSON.parse(raw);
+
+        const prev = state.previousReport;
+        const curr = state.report;
+
+        const deltaNeck = (curr.avgNeck ?? 0) - (prev.avgNeck ?? 0);
+        const deltaShoulder = (curr.avgShoulder ?? 0) - (prev.avgShoulder ?? 0);
+        const deltaAffect = (curr.avgAffect ?? 0) - (prev.avgAffect ?? 0);
+
+        let label = "Sem mudança relevante";
+        if (deltaNeck < 0 || deltaShoulder < 0 || deltaAffect < 0) label = "Melhora parcial";
+        if (deltaNeck > 0 || deltaShoulder > 0 || deltaAffect > 0) label = "Atenção";
+
+        ui.compareStatus.textContent = label;
+        ui.compareText.textContent =
+          `Neck Δ ${deltaNeck.toFixed(1)}°, Shoulder Δ ${deltaShoulder.toFixed(1)}°, ` +
+          `Affect Δ ${deltaAffect.toFixed(1)} em relação à última sessão.`;
+      } catch (err) {
+        console.error(err);
+        ui.compareStatus.textContent = "-";
+        ui.compareText.textContent = "Falha ao ler a sessão anterior.";
+      }
+    }
+
+    function saveCurrentReport() {
+      if (!state.report) return;
+      localStorage.setItem("xrClinicalLastReport", JSON.stringify(state.report));
+    }
+
+    async function loop() {
+      if (!state.sessionActive || !state.cameraReady || !state.poseDetector || !state.faceDetector) {
+        state.rafId = requestAnimationFrame(loop);
+        return;
+      }
+
+      ctx.clearRect(0, 0, ui.overlayCanvas.width, ui.overlayCanvas.height);
+
+      try {
+        const poses = await state.poseDetector.estimatePoses(ui.hiddenVideo, { maxPoses: 1, flipHorizontal: false });
+        const faces = await state.faceDetector.estimateFaces(ui.hiddenVideo);
+
+        if (poses[0] && poses[0].keypoints) {
+          const keypoints = poses[0].keypoints;
+          const map = getKPMap(keypoints);
+
+          drawFullSkeleton(map);
+          computeBiomechRefined(keypoints);
+          updateAvatar(map);
+          applyHeatmapRegional();
+        }
+
+        if (faces[0]) {
+          computeAffect(faces[0]);
+          faces[0].keypoints.slice(0, 100).forEach(p => drawPoint(p.x, p.y, "#ff4fd8", 1.8));
+        } else {
+          state.metrics.facialEffortScore = null;
+          state.metrics.discomfortScore = null;
+          state.metrics.affectiveLabel = "-";
+        }
+
+        fuseAdvanced();
+        updateProtocolCountdown();
+        updateUI();
+        captureFrame();
+      } catch (err) {
+        console.error(err);
+      }
+
+      state.rafId = requestAnimationFrame(loop);
+    }
+
+    async function startSession() {
+      if (!state.cameraReady) {
+        setStatus("Inicie a câmera primeiro.");
+        return;
+      }
+      if (!state.poseDetector || !state.faceDetector) {
+        setStatus("Carregue os modelos primeiro.");
+        return;
+      }
+
+      state.protocol = ui.protocolSelect.value;
+      state.protocolSteps = protocols[state.protocol];
+      state.protocolIndex = 0;
+      state.protocolStepEndAt = null;
+      state.sessionStartAt = Date.now();
+      state.sessionActive = true;
+
+      addEvent("Sessão iniciada", "info", { protocol: state.protocol });
+      startProtocolFlow();
+      setStatus("Sessão iniciada.");
+      loop();
+    }
+
+    function stopSession() {
+      state.sessionActive = false;
+      addEvent("Sessão encerrada", "info", { protocol: state.protocol });
+      generateReport();
+      saveCurrentReport();
+      compareWithPrevious();
+      setStatus("Sessão encerrada.");
+    }
+
+    function resetAll() {
+      state.sessionActive = false;
+      state.frames = [];
+      state.events = [];
+      state.report = null;
+      state.lastEventAt = {};
+      state.sessionStartAt = null;
+      state.metrics = {
+        neckAngle: null,
+        shoulderElevation: null,
+        trunkLean: null,
+        symmetryScore: null,
+        biomechRisk: "Baixo",
+        facialEffortScore: null,
+        discomfortScore: null,
+        affectiveLabel: "-",
+        compositeRisk: "-"
+      };
+      state.smooth = {
+        neck: null,
+        shoulder: null,
+        trunk: null,
+        affect: null
+      };
+
+      ui.timeline.max = 0;
+      ui.timeline.value = 0;
+      ui.timeLabel.textContent = "00:00";
+      ui.reportRisk.textContent = "-";
+      ui.reportText.textContent = "O relatório será gerado ao final da sessão.";
+      ui.ghostRoot.setAttribute("visible", false);
+
+      renderEvents();
+      updateUI();
+      setupProtocol();
+      compareWithPrevious();
+      setStatus("Sistema resetado.");
+    }
+
+    function exportJSON() {
+      const payload = {
+        protocol: state.protocol,
+        report: state.report,
+        frames: state.frames,
+        events: state.events
+      };
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "xr_v13_session.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function exportExcel() {
+      const wb = XLSX.utils.book_new();
+
+      const summary = [{
+        protocol: state.protocol,
+        session_start: state.sessionStartAt ? new Date(state.sessionStartAt).toISOString() : "",
+        total_frames: state.frames.length,
+        total_events: state.events.length,
+        final_risk: state.metrics.compositeRisk,
+        duration_seconds: state.report?.durationSeconds ?? ""
+      }];
+
+      const report = [{
+        avg_neck: state.report?.avgNeck ?? "",
+        max_neck: state.report?.maxNeck ?? "",
+        avg_shoulder: state.report?.avgShoulder ?? "",
+        max_shoulder: state.report?.maxShoulder ?? "",
+        avg_trunk: state.report?.avgTrunk ?? "",
+        max_trunk: state.report?.maxTrunk ?? "",
+        avg_affect: state.report?.avgAffect ?? "",
+        max_affect: state.report?.maxAffect ?? "",
+        total_events: state.report?.totalEvents ?? "",
+        final_risk: state.report?.finalRisk ?? ""
+      }];
+
+      const frameRows = state.frames.map(f => ({
+        timestamp: f.timestamp,
+        protocol: f.protocol,
+        neck_angle: f.neckAngle,
+        shoulder_elevation: f.shoulderElevation,
+        trunk_lean: f.trunkLean,
+        symmetry_score: f.symmetryScore,
+        biomech_risk: f.biomechRisk,
+        facial_effort_score: f.facialEffortScore,
+        discomfort_score: f.discomfortScore,
+        affective_label: f.affectiveLabel,
+        composite_risk: f.compositeRisk
+      }));
+
+      const eventRows = state.events.map(e => ({
+        timestamp: e.timestamp,
+        protocol: e.protocol,
+        type: e.type,
+        severity: e.severity,
+        step: e.step ?? "",
+        value: e.value ?? ""
+      }));
+
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "SessionSummary");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(report), "ClinicalReport");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(frameRows), "FrameData");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(eventRows), "Events");
+
+      XLSX.writeFile(wb, "xr_v13_session.xlsx");
+    }
+
+    ui.timeline.addEventListener("input", (e) => {
+      scrubFrame(Number(e.target.value));
+    });
+
+    document.getElementById("btnStartCamera").addEventListener("click", startCamera);
+    document.getElementById("btnStopCamera").addEventListener("click", stopCamera);
+    document.getElementById("btnLoadModels").addEventListener("click", loadModels);
+    document.getElementById("btnStartSession").addEventListener("click", startSession);
+    document.getElementById("btnStopSession").addEventListener("click", stopSession);
+    document.getElementById("btnReset").addEventListener("click", resetAll);
+    document.getElementById("btnExportExcel").addEventListener("click", exportExcel);
+    document.getElementById("btnExportJSON").addEventListener("click", exportJSON);
+
+    ui.protocolSelect.addEventListener("change", setupProtocol);
+
+    document.querySelector("#avatarEntity").addEventListener("model-loaded", captureAvatarBones);
+
+    window.addEventListener("resize", resizeCanvas);
+
+    document.querySelector("#xrScene").addEventListener("loaded", () => {
+      resizeCanvas();
+      setupProtocol();
+      compareWithPrevious();
+      updateUI();
+      renderEvents();
+      setStatus("Cena pronta.");
+    });
+  </script>
+</body>
+</html>
