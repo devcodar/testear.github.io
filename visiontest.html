@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ergo MR Demo — TFJS + WebXR (Single File, Curved UI)</title>
+
+  <style>
+    :root { --bg:#0b1020; --panel:#111936; --text:#e8ecff; }
+    html, body { height:100%; margin:0; background:var(--bg); color:var(--text); font-family:Arial, sans-serif; }
+    .wrap { display:flex; height:100vh; width:100vw; }
+    .left, .right { width:50%; position:relative; overflow:hidden; }
+    .left { background:var(--panel); display:flex; flex-direction:column; }
+    .toolbar{
+      padding:10px 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+    }
+    .toolbar button, .toolbar select{
+      background:#1c2a5a; border:1px solid rgba(255,255,255,.14);
+      color:var(--text); padding:8px 10px; border-radius:8px; cursor:pointer;
+    }
+    .toolbar button:disabled{ opacity:.5; cursor:not-allowed; }
+    .badge{ padding:2px 8px; border-radius:999px; background:rgba(255,255,255,.10); }
+    .stage{ flex:1; display:flex; align-items:center; justify-content:center; position:relative; }
+    #rawVideo{ display:none; }
+    #segCanvas{ max-width:100%; max-height:100%; background:transparent; }
+    .hint{
+      position:absolute; left:12px; bottom:12px; font-size:12px; opacity:.88; max-width:92%; line-height:1.35;
+    }
+    .right{ background:#000; }
+    a-scene{ width:100%; height:100%; }
+  </style>
+
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <!-- TFJS + Body Segmentation -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation@1.0.2/dist/body-segmentation.min.js"></script>
+
+  <script>
+    // Force canvas texture refresh in A-Frame
+    AFRAME.registerComponent('canvas-texture-updater', {
+      tick: function () {
+        const mesh = this.el.getObject3D('mesh');
+        if (!mesh) return;
+        const mat = mesh.material;
+        if (mat && mat.map) mat.map.needsUpdate = true;
+      }
+    });
+
+    // Simple "pulse" micro-animation on click (VR polish)
+    AFRAME.registerComponent('pulse-on-click', {
+      init: function () {
+        const el = this.el;
+        el.addEventListener('click', () => {
+          el.setAttribute('animation__p', {
+            property: 'scale', dur: 120, dir: 'alternate', loop: 2,
+            to: '1.05 1.05 1.05', easing: 'easeOutQuad'
+          });
+        });
+      }
+    });
+  </script>
+</head>
+
+<body>
+<div class="wrap">
+  <!-- LEFT: TFJS -->
+  <section class="left" id="leftPanel">
+    <div class="toolbar">
+      <button id="btnStart">Iniciar câmera</button>
+      <button id="btnStop" disabled>Parar</button>
+
+      <select id="modelType">
+        <option value="mediapipe" selected>MediaPipeSelfieSegmentation</option>
+        <option value="bodypix">BodyPix</option>
+      </select>
+
+      <select id="mode">
+        <option value="cutout" selected>Recorte (fundo removido)</option>
+        <option value="mask">Máscara (colorida)</option>
+      </select>
+
+      <select id="bg">
+        <option value="transparent" selected>Fundo transparente</option>
+        <option value="solid">Fundo sólido</option>
+      </select>
+
+      <span class="badge" id="status">idle</span>
+    </div>
+
+    <div class="stage">
+      <video id="rawVideo" playsinline></video>
+      <canvas id="segCanvas" width="640" height="480"></canvas>
+      <div class="hint">
+        Esquerda: TFJS segmentation. Direita: WebXR (Enter VR). UI VR curvada + cards + Focus Mode.
+        <br/>Câmera só funciona em HTTPS (GitHub Pages/Netlify). Em Quest, disponibilidade depende do firmware.
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: WebXR -->
+  <section class="right" id="rightPanel">
+    <a-scene embedded vr-mode-ui="enabled:true" renderer="colorManagement:true">
+      <!-- Environment -->
+      <a-sky color="#070812"></a-sky>
+      <a-entity position="0 0 -3">
+        <a-plane rotation="-90 0 0" width="14" height="14" color="#0b0f20"></a-plane>
+      </a-entity>
+
+      <!-- Lighting -->
+      <a-entity light="type: ambient; intensity: 0.95"></a-entity>
+      <a-entity light="type: directional; intensity: 0.65" position="1 2 1"></a-entity>
+
+      <!-- Main Screen (canvas texture) + frame -->
+      <a-entity id="screenRig" position="0 1.62 -2.15">
+        <a-plane
+          id="segScreen"
+          width="1.86"
+          height="1.18"
+          material="shader: flat; src: #segCanvas; transparent: true; opacity: 1"
+          canvas-texture-updater
+          position="0 0 0">
+        </a-plane>
+        <a-plane width="1.94" height="1.26" position="0 0 -0.01" color="#12183a" opacity="1"></a-plane>
+        <a-plane width="1.98" height="1.30" position="0 0 -0.02" color="#070812" opacity="1"></a-plane>
+
+        <!-- subtle label -->
+        <a-entity position="0 0.78 0.02">
+          <a-text value="Live Segmentation Feed" align="center" width="3" color="#B9C3FF"></a-text>
+        </a-entity>
+      </a-entity>
+
+      <!-- Curved HUD (XR OS feel): cylinder segment -->
+      <a-entity id="hudRig" position="0 0.96 -1.35" rotation="-10 0 0">
+        <!-- Curved backing -->
+        <a-cylinder
+          id="hudBack"
+          radius="2.25"
+          height="0.72"
+          theta-start="-34"
+          theta-length="68"
+          open-ended="true"
+          color="#0f1638"
+          opacity="0.92">
+        </a-cylinder>
+
+        <!-- Header text -->
+        <a-entity position="0 0.24 0.16">
+          <a-text id="hudTitle" value="VVX Ergonomics — WebXR Demo" align="center" width="4" color="#E8ECFF"></a-text>
+          <a-text id="uiStatusText" value="status: idle" position="0 -0.12 0" align="center" width="4" color="#B9C3FF"></a-text>
+        </a-entity>
+
+        <!-- Buttons row (large hit areas) -->
+        <a-entity position="0 -0.10 0.22">
+          <!-- Mode -->
+          <a-entity position="-0.78 0 0">
+            <a-plane class="vrbtn" id="btnModeVR" width="0.62" height="0.20" color="#1c2a5a" pulse-on-click></a-plane>
+            <a-text id="lblMode" value="Mode: Cutout" position="-0.28 -0.035 0.01" width="1.6" color="#E8ECFF"></a-text>
+          </a-entity>
+
+          <!-- BG -->
+          <a-entity position="0 0 0">
+            <a-plane class="vrbtn" id="btnBgVR" width="0.62" height="0.20" color="#1c2a5a" pulse-on-click></a-plane>
+            <a-text id="lblBg" value="BG: Transparent" position="-0.28 -0.035 0.01" width="1.8" color="#E8ECFF"></a-text>
+          </a-entity>
+
+          <!-- Opacity -->
+          <a-entity position="0.78 0 0">
+            <a-plane class="vrbtn" id="btnOpacityVR" width="0.62" height="0.20" color="#1c2a5a" pulse-on-click></a-plane>
+            <a-text id="lblOp" value="Opacity: 100%" position="-0.28 -0.035 0.01" width="1.6" color="#E8ECFF"></a-text>
+          </a-entity>
+        </a-entity>
+
+        <!-- Cards row (metrics) -->
+        <a-entity id="cardsRow" position="0 -0.32 0.22">
+          <a-entity position="-0.80 0 0">
+            <a-plane width="0.58" height="0.22" color="#101a44" opacity="0.96"></a-plane>
+            <a-text value="Knee" position="-0.25 0.045 0.01" width="1.2" color="#8EA0FF"></a-text>
+            <a-text id="mKnee" value="--°" position="-0.25 -0.045 0.01" width="1.4" color="#E8ECFF"></a-text>
+          </a-entity>
+
+          <a-entity position="0 0 0">
+            <a-plane width="0.58" height="0.22" color="#101a44" opacity="0.96"></a-plane>
+            <a-text value="Hip" position="-0.25 0.045 0.01" width="1.2" color="#8EA0FF"></a-text>
+            <a-text id="mHip" value="--°" position="-0.25 -0.045 0.01" width="1.4" color="#E8ECFF"></a-text>
+          </a-entity>
+
+          <a-entity position="0.80 0 0">
+            <a-plane width="0.58" height="0.22" color="#101a44" opacity="0.96"></a-plane>
+            <a-text value="Reach" position="-0.25 0.045 0.01" width="1.2" color="#8EA0FF"></a-text>
+            <a-text id="mReach" value="-- cm" position="-0.25 -0.045 0.01" width="1.6" color="#E8ECFF"></a-text>
+          </a-entity>
+        </a-entity>
+
+        <!-- Focus toggle -->
+        <a-entity position="0 -0.54 0.22">
+          <a-plane class="vrbtn" id="btnFocusVR" width="0.95" height="0.18" color="#24306a" pulse-on-click></a-plane>
+          <a-text id="lblFocus" value="Focus: OFF (Hide left panel)" position="-0.44 -0.03 0.01" width="2.4" color="#E8ECFF"></a-text>
+        </a-entity>
+      </a-entity>
+
+      <!-- Cursor (gaze + fuse) -->
+      <a-entity position="0 1.6 0">
+        <a-camera>
+          <a-cursor
+            fuse="true"
+            fuse-timeout="650"
+            raycaster="objects: .vrbtn"
+            material="color: #E8ECFF; shader: flat"
+            geometry="primitive: ring; radiusInner: 0.008; radiusOuter: 0.013">
+          </a-cursor>
+        </a-camera>
+      </a-entity>
+    </a-scene>
+  </section>
+</div>
+
+<script>
+  // ---------------------------
+  // DOM refs (2D)
+  // ---------------------------
+  const leftPanel = document.getElementById('leftPanel');
+  const rightPanel = document.getElementById('rightPanel');
+
+  const btnStart = document.getElementById('btnStart');
+  const btnStop  = document.getElementById('btnStop');
+  const statusEl = document.getElementById('status');
+
+  const rawVideo = document.getElementById('rawVideo');
+  const segCanvas = document.getElementById('segCanvas');
+  const ctx = segCanvas.getContext('2d');
+
+  const selModelType = document.getElementById('modelType');
+  const selMode = document.getElementById('mode');
+  const selBg = document.getElementById('bg');
+
+  // ---------------------------
+  // VR UI refs
+  // ---------------------------
+  const uiStatusText = document.getElementById('uiStatusText');
+  const lblMode = document.getElementById('lblMode');
+  const lblBg = document.getElementById('lblBg');
+  const lblOp = document.getElementById('lblOp');
+  const lblFocus = document.getElementById('lblFocus');
+
+  const btnModeVR = document.getElementById('btnModeVR');
+  const btnBgVR = document.getElementById('btnBgVR');
+  const btnOpacityVR = document.getElementById('btnOpacityVR');
+  const btnFocusVR = document.getElementById('btnFocusVR');
+
+  const segScreen = document.getElementById('segScreen');
+
+  const mKnee = document.getElementById('mKnee');
+  const mHip = document.getElementById('mHip');
+  const mReach = document.getElementById('mReach');
+
+  // ---------------------------
+  // State
+  // ---------------------------
+  let stream = null;
+  let running = false;
+  let segmenter = null;
+  let focusMode = false;
+
+  // Demo metrics (mock). Later you plug real angles/distances.
+  function updateMockMetrics() {
+    if (!running) {
+      mKnee?.setAttribute('value', '--°');
+      mHip?.setAttribute('value', '--°');
+      mReach?.setAttribute('value', '-- cm');
+      return;
+    }
+    const t = Date.now() * 0.001;
+    const knee = Math.round(60 + 20 * Math.sin(t * 1.3));
+    const hip = Math.round(95 + 15 * Math.sin(t * 0.9 + 1.2));
+    const reach = Math.round(42 + 8 * Math.sin(t * 1.1 + 0.6));
+    mKnee?.setAttribute('value', `${knee}°`);
+    mHip?.setAttribute('value', `${hip}°`);
+    mReach?.setAttribute('value', `${reach} cm`);
+  }
+
+  function setStatus(txt) {
+    statusEl.textContent = txt;
+    uiStatusText?.setAttribute('value', `status: ${txt}`);
+  }
+
+  function ensureSecureContext() {
+    if (!window.isSecureContext) {
+      setStatus('bloqueado (precisa HTTPS)');
+      alert('A câmera só funciona em HTTPS. Publique em GitHub Pages ou Netlify (hosting estático).');
+      return false;
+    }
+    return true;
+  }
+
+  async function initSegmenter() {
+    setStatus('carregando modelo...');
+    const modelType = selModelType.value;
+
+    if (modelType === 'mediapipe') {
+      const model = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
+      segmenter = await bodySegmentation.createSegmenter(model, {
+        runtime: 'tfjs',
+        modelType: 'general'
+      });
+    } else {
+      const model = bodySegmentation.SupportedModels.BodyPix;
+      segmenter = await bodySegmentation.createSegmenter(model, {
+        architecture: 'MobileNetV1',
+        outputStride: 16,
+        multiplier: 0.75,
+        quantBytes: 2
+      });
+    }
+    setStatus('modelo ok');
+  }
+
+  async function startCamera() {
+    if (!ensureSecureContext()) return;
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'user',
+        width: { ideal: 640 },
+        height:{ ideal: 480 }
+      },
+      audio: false
+    });
+
+    rawVideo.srcObject = stream;
+    await rawVideo.play();
+  }
+
+  function stopCamera() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    rawVideo.srcObject = null;
+  }
+
+  function drawBackground() {
+    if (selBg.value === 'solid') {
+      ctx.clearRect(0,0,segCanvas.width, segCanvas.height);
+      ctx.fillStyle = '#0b1020';
+      ctx.fillRect(0,0,segCanvas.width, segCanvas.height);
+    } else {
+      ctx.clearRect(0,0,segCanvas.width, segCanvas.height);
+    }
+  }
+
+  function syncVrLabels() {
+    lblMode?.setAttribute('value', `Mode: ${selMode.value === 'cutout' ? 'Cutout' : 'Mask'}`);
+    lblBg?.setAttribute('value', `BG: ${selBg.value === 'transparent' ? 'Transparent' : 'Solid'}`);
+
+    const m = segScreen.getAttribute('material') || {};
+    const op = Math.round(parseFloat(m.opacity ?? 1) * 100);
+    lblOp?.setAttribute('value', `Opacity: ${op}%`);
+
+    lblFocus?.setAttribute('value', focusMode ? 'Focus: ON (Left hidden)' : 'Focus: OFF (Hide left panel)');
+  }
+
+  function vrBtnFeedback(el) {
+    el.addEventListener('mouseenter', () => el.setAttribute('color', '#2b3a7a'));
+    el.addEventListener('mouseleave', () => el.setAttribute('color', el.id === 'btnFocusVR' ? '#24306a' : '#1c2a5a'));
+    el.addEventListener('click', () => el.setAttribute('color', '#3b82f6'));
+  }
+
+  [btnModeVR, btnBgVR, btnOpacityVR, btnFocusVR].forEach(vrBtnFeedback);
+
+  btnModeVR.addEventListener('click', () => {
+    selMode.value = (selMode.value === 'cutout') ? 'mask' : 'cutout';
+    syncVrLabels();
+  });
+
+  btnBgVR.addEventListener('click', () => {
+    selBg.value = (selBg.value === 'transparent') ? 'solid' : 'transparent';
+    syncVrLabels();
+  });
+
+  btnOpacityVR.addEventListener('click', () => {
+    const m = segScreen.getAttribute('material') || {};
+    const cur = parseFloat(m.opacity ?? 1);
+    const next = cur > 0.67 ? 0.67 : (cur > 0.34 ? 0.34 : 1);
+    segScreen.setAttribute('material', { ...m, opacity: next });
+    syncVrLabels();
+  });
+
+  btnFocusVR.addEventListener('click', () => {
+    focusMode = !focusMode;
+    // Hide left panel in "focus mode" (keeps right 100%)
+    if (focusMode) {
+      leftPanel.style.display = 'none';
+      rightPanel.style.width = '100%';
+    } else {
+      leftPanel.style.display = 'flex';
+      rightPanel.style.width = '50%';
+    }
+    syncVrLabels();
+  });
+
+  selMode.addEventListener('change', syncVrLabels);
+  selBg.addEventListener('change', syncVrLabels);
+
+  async function loop() {
+    if (!running) return;
+
+    const vw = rawVideo.videoWidth || 640;
+    const vh = rawVideo.videoHeight || 480;
+    if (segCanvas.width !== vw) segCanvas.width = vw;
+    if (segCanvas.height !== vh) segCanvas.height = vh;
+
+    const people = await segmenter.segmentPeople(rawVideo, { multiSegmentation: false });
+
+    drawBackground();
+
+    if (selMode.value === 'cutout') {
+      const mask = await bodySegmentation.toBinaryMask(
+        people,
+        { r: 0, g: 0, b: 0, a: 0 },
+        { r: 255, g: 255, b: 255, a: 255 }
+      );
+
+      ctx.save();
+      ctx.drawImage(rawVideo, 0, 0, vw, vh);
+      await bodySegmentation.drawMask(segCanvas, rawVideo, mask, 1.0, 0, false);
+      ctx.restore();
+    } else {
+      const coloredMask = await bodySegmentation.toColoredMask(people);
+      await bodySegmentation.drawMask(segCanvas, rawVideo, coloredMask, 0.7, 0, true);
+    }
+
+    updateMockMetrics();
+    syncVrLabels();
+    requestAnimationFrame(loop);
+  }
+
+  btnStart.addEventListener('click', async () => {
+    try {
+      btnStart.disabled = true;
+      setStatus('iniciando...');
+      if (!segmenter) await initSegmenter();
+      await startCamera();
+      running = true;
+      btnStop.disabled = false;
+      setStatus('rodando');
+      syncVrLabels();
+      loop();
+    } catch (e) {
+      console.error(e);
+      setStatus('erro');
+      btnStart.disabled = false;
+      alert('Falha ao iniciar. Garanta HTTPS e permissões de câmera. No Quest, a disponibilidade pode variar por firmware.');
+    }
+  });
+
+  btnStop.addEventListener('click', () => {
+    running = false;
+    stopCamera();
+    btnStop.disabled = true;
+    btnStart.disabled = false;
+    setStatus('parado');
+    updateMockMetrics();
+    syncVrLabels();
+  });
+
+  selModelType.addEventListener('change', async () => {
+    if (segmenter) {
+      segmenter.dispose?.();
+      segmenter = null;
+      setStatus('modelo reset');
+    }
+  });
+
+  setStatus('idle');
+  updateMockMetrics();
+  syncVrLabels();
+</script>
+</body>
+</html>
