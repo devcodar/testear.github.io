@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ErgoVision MR - Produto</title>
+
+<!-- A-Frame -->
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+
+<!-- TensorFlow -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+
+<!-- Pose Detection -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+
+<style>
+body { margin:0; overflow:hidden; font-family: Arial; }
+
+#debug {
+  position:absolute;
+  top:10px;
+  left:10px;
+  color:white;
+  background:rgba(0,0,0,0.6);
+  padding:10px;
+  border-radius:10px;
+  z-index:10;
+}
+</style>
+</head>
+
+<body>
+
+<div id="debug">Inicializando sistema...</div>
+
+<a-scene
+  vr-mode-ui="enabled: true"
+  xrweb="mode: immersive-ar; referenceSpaceType: local"
+  renderer="colorManagement: true;"
+>
+
+  <!-- CAMERA -->
+  <a-entity camera position="0 1.6 0"></a-entity>
+
+  <!-- PAINEL PRINCIPAL -->
+  <a-entity id="panel"
+    position="0 1.5 -1"
+    geometry="primitive: plane; width: 0.7; height: 0.35"
+    material="color: black; opacity: 0.8">
+
+    <a-text id="text"
+      value="Carregando..."
+      color="white"
+      align="center"
+      position="0 0.05 0.01"
+      width="1.6">
+    </a-text>
+
+  </a-entity>
+
+  <!-- INDICADOR VISUAL -->
+  <a-sphere id="indicator"
+    position="0 1 -1"
+    radius="0.05"
+    color="yellow">
+  </a-sphere>
+
+</a-scene>
+
+<script>
+/* ==============================
+   CONFIG
+============================== */
+const CONFIG = {
+  knee: { min: 90, max: 120 },
+  kneeWarning: { min: 120, max: 140 }
+};
+
+/* ==============================
+   VARIÁVEIS
+============================== */
+let video;
+let detector;
+
+/* ==============================
+   UTIL - ÂNGULO
+============================== */
+function calculateAngle(a, b, c) {
+  const ab = [a.x - b.x, a.y - b.y];
+  const cb = [c.x - b.x, c.y - b.y];
+
+  const dot = ab[0]*cb[0] + ab[1]*cb[1];
+  const magA = Math.sqrt(ab[0]**2 + ab[1]**2);
+  const magC = Math.sqrt(cb[0]**2 + cb[1]**2);
+
+  return Math.acos(dot / (magA * magC)) * (180 / Math.PI);
+}
+
+/* ==============================
+   MOTOR ERGONÔMICO
+============================== */
+function evaluateErgonomics(keypoints) {
+  const hip = keypoints[11];
+  const knee = keypoints[13];
+  const ankle = keypoints[15];
+
+  if (!hip || !knee || !ankle) return null;
+  if (hip.score < 0.5 || knee.score < 0.5 || ankle.score < 0.5) return null;
+
+  const angle = calculateAngle(hip, knee, ankle);
+
+  return {
+    kneeAngle: angle
+  };
+}
+
+/* ==============================
+   MOTOR NORMATIVO
+============================== */
+function classify(angle) {
+  if (angle >= CONFIG.knee.min && angle <= CONFIG.knee.max) {
+    return { status: "ADEQUADO", color: "green" };
+  }
+
+  if (angle > CONFIG.kneeWarning.min && angle <= CONFIG.kneeWarning.max) {
+    return { status: "LIMITROFE", color: "yellow" };
+  }
+
+  return { status: "INADEQUADO", color: "red" };
+}
+
+/* ==============================
+   RENDER MR
+============================== */
+function updateUI(angle, result) {
+  const text = document.querySelector("#text");
+  const panel = document.querySelector("#panel");
+  const indicator = document.querySelector("#indicator");
+
+  text.setAttribute("value",
+    `JOELHO: ${angle.toFixed(0)}°\n${result.status}`
+  );
+
+  panel.setAttribute("material", "color", result.color);
+  indicator.setAttribute("color", result.color);
+}
+
+/* ==============================
+   CAMERA
+============================== */
+async function initCamera() {
+  video = document.createElement("video");
+  video.setAttribute("playsinline", true);
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" }
+  });
+
+  video.srcObject = stream;
+  await video.play();
+}
+
+/* ==============================
+   IA
+============================== */
+async function initAI() {
+  const model = poseDetection.SupportedModels.MoveNet;
+
+  detector = await poseDetection.createDetector(model, {
+    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+  });
+}
+
+/* ==============================
+   LOOP PRINCIPAL
+============================== */
+async function loop() {
+  if (!detector || !video) return;
+
+  const poses = await detector.estimatePoses(video);
+
+  if (poses.length > 0) {
+    const metrics = evaluateErgonomics(poses[0].keypoints);
+
+    if (metrics) {
+      const result = classify(metrics.kneeAngle);
+      updateUI(metrics.kneeAngle, result);
+    }
+  }
+
+  requestAnimationFrame(loop);
+}
+
+/* ==============================
+   INIT
+============================== */
+async function start() {
+  const debug = document.getElementById("debug");
+
+  try {
+    debug.innerText = "Ativando câmera...";
+    await initCamera();
+
+    debug.innerText = "Carregando IA...";
+    await initAI();
+
+    debug.innerText = "Sistema rodando";
+    loop();
+
+  } catch (err) {
+    debug.innerText = "Erro: " + err.message;
+    console.error(err);
+  }
+}
+
+start();
+
+</script>
+
+</body>
+</html>
