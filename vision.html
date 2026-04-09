@@ -1,24 +1,19 @@
 <!DOCTYPE html>
-
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
 <title>Thunber — Safety Vision OS</title>
-
+ 
 <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
-
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
-
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.5/dist/face-landmarks-detection.js"></script>
-
+ 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;700;900&display=swap');
-
+ 
 /* ══════════════════════════════════════
    DESIGN SYSTEM
 ══════════════════════════════════════ */
@@ -39,16 +34,16 @@
   --mono:   'Share Tech Mono','Courier New',monospace;
   --cond:   'Barlow Condensed',system-ui,sans-serif;
 }
-
+ 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--black);color:var(--white);font-family:var(--cond)}
-
+ 
 /* scanlines */
 body::after{
   content:'';position:fixed;inset:0;pointer-events:none;z-index:99990;
   background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.05) 2px,rgba(0,0,0,.05) 4px);
 }
-
+ 
 /* ══════════════════════════════════════
    BOOT SCREEN
 ══════════════════════════════════════ */
@@ -59,31 +54,31 @@ body::after{
   transition:opacity .6s ease;
 }
 #boot.hidden{opacity:0;pointer-events:none}
-
+ 
 .boot-logo{
   font-family:var(--cond);font-size:64px;font-weight:900;letter-spacing:8px;
   color:var(--green);text-shadow:0 0 40px rgba(0,230,118,.5);
   animation:bootPulse 1.5s ease-in-out infinite;
 }
 @keyframes bootPulse{0%,100%{text-shadow:0 0 40px rgba(0,230,118,.5)}50%{text-shadow:0 0 80px rgba(0,230,118,.9)}}
-
+ 
 .boot-sub{
   font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:4px;text-transform:uppercase;
 }
-
+ 
 .boot-credit{
   font-family:var(--mono);font-size:11px;color:rgba(0,230,118,.35);letter-spacing:2px;
   margin-top:8px;
 }
-
+ 
 .boot-bar-wrap{width:280px;height:2px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
 .boot-bar{height:100%;background:var(--green);width:0%;transition:width .08s linear;box-shadow:0 0 10px var(--green)}
-
+ 
 .boot-log{
   font-family:var(--mono);font-size:11px;color:var(--muted);
   min-height:16px;letter-spacing:1px;text-align:center;
 }
-
+ 
 /* ══════════════════════════════════════
    TOP NAV BAR
 ══════════════════════════════════════ */
@@ -94,7 +89,7 @@ body::after{
   border-bottom:1px solid var(--border);
   user-select:none;
 }
-
+ 
 .nb-brand{
   display:flex;align-items:center;gap:12px;
   padding:0 20px;border-right:1px solid var(--border);height:100%;flex-shrink:0;
@@ -107,7 +102,7 @@ body::after{
   font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:2px;
   line-height:1.3;text-transform:uppercase;
 }
-
+ 
 /* Nav pills */
 .nb-pills{display:flex;align-items:center;gap:2px;padding:0 12px;border-right:1px solid var(--border);height:100%}
 .pill{
@@ -129,7 +124,7 @@ body::after{
 .dot-red{background:var(--red);box-shadow:0 0 6px var(--red);animation:blinkD .5s infinite}
 .dot-off{background:var(--muted)}
 @keyframes blinkD{0%,100%{opacity:1}50%{opacity:.2}}
-
+ 
 /* Spacer & right zone */
 .nb-space{flex:1}
 .nb-right{
@@ -138,7 +133,7 @@ body::after{
 }
 .nb-fps{font-family:var(--mono);font-size:10px;color:var(--muted)}
 .nb-time{font-family:var(--mono);font-size:11px;color:rgba(0,230,118,.5)}
-
+ 
 /* ══════════════════════════════════════
    ALERT TICKER
 ══════════════════════════════════════ */
@@ -156,7 +151,7 @@ body::after{
   border:1px solid var(--border);background:transparent;
 }
 .ticker-close:hover{color:var(--white)}
-
+ 
 /* ══════════════════════════════════════
    MAIN LAYOUT
 ══════════════════════════════════════ */
@@ -169,7 +164,7 @@ body::after{
   overflow:hidden;
 }
 #app.ticker-open{top:86px}
-
+ 
 /* ══════════════════════════════════════
    LEFT PANEL — SAFETY SCORES
 ══════════════════════════════════════ */
@@ -179,7 +174,7 @@ body::after{
   display:flex;flex-direction:column;
   overflow:hidden;
 }
-
+ 
 .lp-header{
   padding:16px 16px 12px;
   border-bottom:1px solid var(--border);
@@ -188,7 +183,7 @@ body::after{
   display:flex;align-items:center;gap:8px;
 }
 .lp-header::before{content:'';width:20px;height:1px;background:var(--green)}
-
+ 
 /* Safety Score Ring */
 #safetyRingWrap{
   display:flex;flex-direction:column;align-items:center;
@@ -196,7 +191,7 @@ body::after{
   border-bottom:1px solid var(--border);
   gap:8px;
 }
-
+ 
 .ring-svg{width:120px;height:120px;transform:rotate(-90deg)}
 .ring-bg{fill:none;stroke:rgba(255,255,255,.06);stroke-width:8}
 .ring-fill{
@@ -210,20 +205,20 @@ body::after{
   fill:var(--green);transition:fill .4s;
 }
 #ringLabel{font-family:var(--mono);font-size:9px;text-anchor:middle;fill:var(--muted);letter-spacing:2px}
-
+ 
 .score-title{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
 #scoreStatus{
   font-family:var(--cond);font-size:18px;font-weight:700;color:var(--green);
   letter-spacing:2px;transition:color .4s;
 }
-
+ 
 /* Detection cards */
 #detectionList{
   flex:1;overflow-y:auto;padding:8px;
   display:flex;flex-direction:column;gap:6px;
   scrollbar-width:thin;scrollbar-color:var(--border) transparent;
 }
-
+ 
 .det-card{
   background:var(--card);
   border:1px solid var(--border);
@@ -238,7 +233,7 @@ body::after{
 .det-card.warn::before{background:var(--amber)}
 .det-card.danger::before{background:var(--red);animation:blinkD .6s infinite}
 .det-card.inactive::before{background:var(--muted)}
-
+ 
 .det-icon{font-size:22px;flex-shrink:0;line-height:1}
 .det-info{flex:1;min-width:0}
 .det-name{font-family:var(--cond);font-size:14px;font-weight:700;color:var(--white);line-height:1}
@@ -251,14 +246,14 @@ body::after{
 .badge-warn{color:var(--amber);border-color:rgba(255,179,0,.4)}
 .badge-danger{color:var(--red);border-color:rgba(255,23,68,.4);animation:blinkD .8s infinite}
 .badge-off{color:var(--muted);border-color:rgba(255,255,255,.1)}
-
+ 
 /* Conf bar */
 .conf-bar{height:2px;background:rgba(255,255,255,.06);margin-top:6px;border-radius:1px;overflow:hidden}
 .conf-fill{height:100%;border-radius:1px;transition:width .5s ease}
 .fill-green{background:var(--green);box-shadow:0 0 4px var(--green)}
 .fill-amber{background:var(--amber);box-shadow:0 0 4px var(--amber)}
 .fill-red{background:var(--red);box-shadow:0 0 4px var(--red)}
-
+ 
 /* ══════════════════════════════════════
    CENTER — VIDEO + CANVAS
 ══════════════════════════════════════ */
@@ -268,26 +263,26 @@ body::after{
   overflow:hidden;
   display:flex;align-items:center;justify-content:center;
 }
-
+ 
 #videoFeed{
   position:absolute;inset:0;width:100%;height:100%;
   object-fit:cover;background:#000;
   transform:scaleX(-1);
 }
 #hiddenVideo{display:none}
-
+ 
 #overlayCanvas{
   position:absolute;inset:0;width:100%;height:100%;
   pointer-events:none;
 }
-
+ 
 /* Center overlay UI */
 #centerTop{
   position:absolute;top:12px;left:12px;right:12px;z-index:10;
   display:flex;align-items:flex-start;justify-content:space-between;
   pointer-events:none;
 }
-
+ 
 .ct-badge{
   font-family:var(--mono);font-size:10px;
   background:rgba(2,4,7,.8);border:1px solid var(--border);
@@ -296,12 +291,12 @@ body::after{
   display:flex;align-items:center;gap:8px;
 }
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--red);box-shadow:0 0 6px var(--red);animation:blinkD .8s infinite}
-
+ 
 #centerBottom{
   position:absolute;bottom:12px;left:12px;right:12px;z-index:10;
   pointer-events:none;
 }
-
+ 
 /* Ergo bar */
 #ergoBar{
   background:rgba(2,4,7,.85);
@@ -312,14 +307,14 @@ body::after{
   grid-template-columns:repeat(4,1fr);
   gap:12px;
 }
-
+ 
 .ergo-item{display:flex;flex-direction:column;gap:3px}
 .ergo-label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
 .ergo-val{font-family:var(--cond);font-size:18px;font-weight:700;color:var(--white);line-height:1}
 .ergo-val.ok-val{color:var(--green)}
 .ergo-val.warn-val{color:var(--amber)}
 .ergo-val.danger-val{color:var(--red)}
-
+ 
 /* No-camera placeholder */
 #noCam{
   position:absolute;inset:0;
@@ -329,14 +324,14 @@ body::after{
 #noCam.hidden{display:none}
 .nocam-icon{font-size:48px;opacity:.3}
 .nocam-text{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:2px}
-
+ 
 /* HUD corners (decorative) */
 .hud-corner{position:absolute;width:20px;height:20px;border-color:rgba(0,230,118,.3);border-style:solid;z-index:6}
 .hc-tl{top:8px;left:8px;border-width:1px 0 0 1px}
 .hc-tr{top:8px;right:8px;border-width:1px 1px 0 0}
 .hc-bl{bottom:8px;left:8px;border-width:0 0 1px 1px}
 .hc-br{bottom:8px;right:8px;border-width:0 1px 1px 0}
-
+ 
 /* ALERT FLASH overlay */
 #alertFlash{
   position:absolute;inset:0;z-index:20;
@@ -345,7 +340,7 @@ body::after{
 }
 #alertFlash.flash-red{border-color:var(--red);box-shadow:inset 0 0 40px rgba(255,23,68,.25)}
 #alertFlash.flash-amber{border-color:var(--amber);box-shadow:inset 0 0 30px rgba(255,179,0,.15)}
-
+ 
 /* ══════════════════════════════════════
    RIGHT PANEL — METRICS & LOG
 ══════════════════════════════════════ */
@@ -355,18 +350,18 @@ body::after{
   display:flex;flex-direction:column;
   overflow:hidden;
 }
-
+ 
 .rp-section{
   border-bottom:1px solid var(--border);
   flex-shrink:0;
 }
-
+ 
 .rp-header{
   padding:10px 14px 8px;
   font-family:var(--mono);font-size:9px;
   color:var(--muted);letter-spacing:3px;text-transform:uppercase;
 }
-
+ 
 /* Metrics grid */
 #metricsGrid{
   display:grid;grid-template-columns:1fr 1fr;
@@ -383,7 +378,7 @@ body::after{
 .mc-val.green{color:var(--green)}
 .mc-val.amber{color:var(--amber)}
 .mc-val.red{color:var(--red)}
-
+ 
 /* Posture analysis */
 #postureWrap{padding:10px 14px;display:flex;flex-direction:column;gap:6px}
 .posture-row{display:flex;align-items:center;gap:8px}
@@ -391,14 +386,14 @@ body::after{
 .posture-bar-bg{flex:1;height:4px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden}
 .posture-bar-fill{height:100%;border-radius:2px;transition:width .5s ease,background .3s}
 .posture-deg{font-family:var(--mono);font-size:10px;color:var(--muted);width:36px;text-align:right;flex-shrink:0}
-
+ 
 /* Event log */
 #eventLog{
   flex:1;overflow-y:auto;padding:6px;
   display:flex;flex-direction:column;gap:3px;
   scrollbar-width:thin;scrollbar-color:var(--border) transparent;
 }
-
+ 
 .log-entry{
   display:flex;align-items:flex-start;gap:8px;
   padding:6px 8px;
@@ -413,7 +408,7 @@ body::after{
 .log-entry.log-info{border-left-color:var(--cyan)}
 .log-time{font-family:var(--mono);font-size:9px;color:var(--muted);flex-shrink:0;margin-top:1px}
 .log-msg{font-family:var(--mono);font-size:10px;color:var(--white);line-height:1.4;letter-spacing:.3px}
-
+ 
 /* ══════════════════════════════════════
    BOTTOM STATUS BAR
 ══════════════════════════════════════ */
@@ -424,7 +419,7 @@ body::after{
   border-top:1px solid var(--border);
   font-family:var(--mono);font-size:10px;
 }
-
+ 
 .stb-item{
   display:flex;align-items:center;gap:6px;
   padding:0 16px;height:100%;
@@ -443,7 +438,7 @@ body::after{
   display:flex;align-items:center;gap:8px;height:100%;
 }
 .stb-credit span{color:rgba(0,230,118,.5)}
-
+ 
 /* ══════════════════════════════════════
    CONTROL DRAWER (slide up)
 ══════════════════════════════════════ */
@@ -455,7 +450,7 @@ body::after{
   transition:all .2s;
 }
 #drawerBtn:hover{background:rgba(0,230,118,.08)}
-
+ 
 #drawer{
   position:fixed;bottom:36px;left:0;right:0;z-index:9550;
   background:rgba(4,10,16,.97);backdrop-filter:blur(20px);
@@ -465,7 +460,7 @@ body::after{
   transform:translateY(100%);transition:transform .3s ease;
 }
 #drawer.open{transform:translateY(0)}
-
+ 
 .ctrl-btn{
   font-family:var(--mono);font-size:11px;letter-spacing:1px;
   background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);
@@ -476,16 +471,16 @@ body::after{
 .ctrl-btn.active-btn{color:var(--green);border-color:rgba(0,230,118,.5);background:rgba(0,230,118,.08)}
 .ctrl-btn.danger-btn{color:var(--red);border-color:rgba(255,23,68,.3)}
 .ctrl-btn.danger-btn:hover{background:rgba(255,23,68,.06)}
-
+ 
 .ctrl-sep{width:1px;height:24px;background:var(--border);flex-shrink:0}
-
+ 
 .ctrl-select{
   font-family:var(--mono);font-size:11px;
   background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);
   color:var(--muted);padding:8px 12px;cursor:pointer;
 }
 .ctrl-select:focus{outline:none;border-color:rgba(0,230,118,.4)}
-
+ 
 /* ══════════════════════════════════════
    MODAL (player externo)
 ══════════════════════════════════════ */
@@ -520,16 +515,16 @@ body::after{
   display:flex;gap:12px;align-items:center;flex-wrap:wrap;
   font-family:var(--mono);font-size:11px;color:var(--muted);
 }
-
+ 
 /* ══════════════════════════════════════
    A-FRAME SCENE (invisible wrapper)
 ══════════════════════════════════════ */
 #xrScene{position:fixed;inset:0;z-index:1;pointer-events:none}
 #xrScene.xr-active{pointer-events:auto}
-
+ 
 /* hidden inputs */
 #importInput{display:none}
-
+ 
 /* ══════════════════════════════════════
    ALERT SOUND INDICATOR
 ══════════════════════════════════════ */
@@ -547,14 +542,12 @@ body::after{
 .sw-bar:nth-child(4){animation-delay:.15s;height:8px}
 .sw-bar:nth-child(5){animation-delay:.05s;height:12px}
 @keyframes swAnim{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
-
+ 
 </style>
-
 </head>
 <body>
-
+ 
 <!-- ══ BOOT SCREEN ══ -->
-
 <div id="boot">
   <div class="boot-logo">THUNBER</div>
   <div class="boot-sub">Safety Vision OS · v3.0</div>
@@ -562,9 +555,8 @@ body::after{
   <div class="boot-bar-wrap"><div class="boot-bar" id="bootBar"></div></div>
   <div class="boot-log" id="bootLog">Iniciando sistema...</div>
 </div>
-
+ 
 <!-- ══ TOP NAV ══ -->
-
 <nav id="navbar">
   <div class="nb-brand">
     <div>
@@ -572,7 +564,7 @@ body::after{
       <div class="nb-tag">Safety Vision OS</div>
     </div>
   </div>
-
+ 
   <div class="nb-pills">
     <div class="pill" id="pillCam" onclick="toggleCamera()">
       <span class="pill-dot dot-off" id="dotCam"></span>CÂMERA
@@ -584,9 +576,9 @@ body::after{
       <span class="pill-dot dot-off" id="dotAnalysis"></span>ANÁLISE
     </div>
   </div>
-
+ 
   <div class="nb-space"></div>
-
+ 
   <div class="nb-right">
     <div id="soundWave">
       <div class="sw-bar" style="height:6px"></div>
@@ -599,109 +591,98 @@ body::after{
     <div class="nb-time" id="clockDisplay">00:00:00</div>
   </div>
 </nav>
-
+ 
 <!-- ══ ALERT TICKER ══ -->
-
 <div id="alertTicker">
   <span class="ticker-icon">⚠</span>
   <span id="tickerText">—</span>
   <button class="ticker-close" onclick="dismissTicker()">✕ DISPENSAR</button>
 </div>
-
+ 
 <!-- ══ MAIN APP ══ -->
-
 <div id="app">
-
+ 
   <!-- LEFT: SAFETY SCORES -->
-
   <div id="leftPanel">
     <div class="lp-header">Avaliação de Segurança</div>
-
-```
-<!-- Safety score ring -->
-<div id="safetyRingWrap">
-  <svg class="ring-svg" viewBox="0 0 120 120">
-    <circle class="ring-bg" cx="60" cy="60" r="54"/>
-    <circle class="ring-fill" id="ringArc" cx="60" cy="60" r="54" stroke="#00e676"/>
-    <text id="ringScore" x="60" y="56" font-family="'Barlow Condensed',sans-serif" font-size="22" font-weight="900">100</text>
-    <text id="ringLabel" x="60" y="72" font-family="'Share Tech Mono',monospace" font-size="8" letter-spacing="2">SCORE</text>
-  </svg>
-  <div class="score-title">STATUS GERAL</div>
-  <div id="scoreStatus">SEGURO</div>
-</div>
-
-<!-- Detection cards -->
-<div id="detectionList">
-  <!-- populated by JS -->
-</div>
-```
-
+ 
+    <!-- Safety score ring -->
+    <div id="safetyRingWrap">
+      <svg class="ring-svg" viewBox="0 0 120 120">
+        <circle class="ring-bg" cx="60" cy="60" r="54"/>
+        <circle class="ring-fill" id="ringArc" cx="60" cy="60" r="54" stroke="#00e676"/>
+        <text id="ringScore" x="60" y="56" font-family="'Barlow Condensed',sans-serif" font-size="22" font-weight="900">100</text>
+        <text id="ringLabel" x="60" y="72" font-family="'Share Tech Mono',monospace" font-size="8" letter-spacing="2">SCORE</text>
+      </svg>
+      <div class="score-title">STATUS GERAL</div>
+      <div id="scoreStatus">SEGURO</div>
+    </div>
+ 
+    <!-- Detection cards -->
+    <div id="detectionList">
+      <!-- populated by JS -->
+    </div>
   </div>
-
+ 
   <!-- CENTER: VIDEO -->
-
   <div id="center">
     <!-- HUD corners -->
     <div class="hud-corner hc-tl"></div>
     <div class="hud-corner hc-tr"></div>
     <div class="hud-corner hc-bl"></div>
     <div class="hud-corner hc-br"></div>
-
-```
-<!-- Alert flash border -->
-<div id="alertFlash"></div>
-
-<!-- No camera placeholder -->
-<div id="noCam">
-  <div class="nocam-icon">📷</div>
-  <div class="nocam-text">AGUARDANDO CÂMERA</div>
-  <div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:4px">
-    Clique em CÂMERA para iniciar
-  </div>
-</div>
-
-<video id="videoFeed" autoplay playsinline muted></video>
-<video id="hiddenVideo" autoplay playsinline muted></video>
-<canvas id="overlayCanvas"></canvas>
-
-<!-- Top overlay -->
-<div id="centerTop">
-  <div class="ct-badge">
-    <span class="live-dot" id="liveDot" style="background:var(--muted);box-shadow:none;animation:none"></span>
-    <span id="liveLabel" style="color:var(--muted)">OFFLINE</span>
-  </div>
-  <div class="ct-badge" id="alertBadge" style="display:none;border-color:rgba(255,23,68,.4);color:var(--red)">
-    ⚠ <span id="alertBadgeText">ALERTA</span>
-  </div>
-</div>
-
-<!-- Bottom ergo bar -->
-<div id="centerBottom">
-  <div id="ergoBar">
-    <div class="ergo-item">
-      <div class="ergo-label">SONOLÊNCIA</div>
-      <div class="ergo-val" id="ergoSleep">—</div>
+ 
+    <!-- Alert flash border -->
+    <div id="alertFlash"></div>
+ 
+    <!-- No camera placeholder -->
+    <div id="noCam">
+      <div class="nocam-icon">📷</div>
+      <div class="nocam-text">AGUARDANDO CÂMERA</div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:4px">
+        Clique em CÂMERA para iniciar
+      </div>
     </div>
-    <div class="ergo-item">
-      <div class="ergo-label">ATENÇÃO</div>
-      <div class="ergo-val" id="ergoAttention">—</div>
+ 
+    <video id="videoFeed" autoplay playsinline muted></video>
+    <video id="hiddenVideo" autoplay playsinline muted></video>
+    <canvas id="overlayCanvas"></canvas>
+ 
+    <!-- Top overlay -->
+    <div id="centerTop">
+      <div class="ct-badge">
+        <span class="live-dot" id="liveDot" style="background:var(--muted);box-shadow:none;animation:none"></span>
+        <span id="liveLabel" style="color:var(--muted)">OFFLINE</span>
+      </div>
+      <div class="ct-badge" id="alertBadge" style="display:none;border-color:rgba(255,23,68,.4);color:var(--red)">
+        ⚠ <span id="alertBadgeText">ALERTA</span>
+      </div>
     </div>
-    <div class="ergo-item">
-      <div class="ergo-label">POSTURA</div>
-      <div class="ergo-val" id="ergoPosture">—</div>
-    </div>
-    <div class="ergo-item">
-      <div class="ergo-label">SENTIMENTO</div>
-      <div class="ergo-val" id="ergoMood">—</div>
+ 
+    <!-- Bottom ergo bar -->
+    <div id="centerBottom">
+      <div id="ergoBar">
+        <div class="ergo-item">
+          <div class="ergo-label">SONOLÊNCIA</div>
+          <div class="ergo-val" id="ergoSleep">—</div>
+        </div>
+        <div class="ergo-item">
+          <div class="ergo-label">ATENÇÃO</div>
+          <div class="ergo-val" id="ergoAttention">—</div>
+        </div>
+        <div class="ergo-item">
+          <div class="ergo-label">POSTURA</div>
+          <div class="ergo-val" id="ergoPosture">—</div>
+        </div>
+        <div class="ergo-item">
+          <div class="ergo-label">SENTIMENTO</div>
+          <div class="ergo-val" id="ergoMood">—</div>
+        </div>
+      </div>
     </div>
   </div>
-</div>
-```
-
-  </div>
-
+ 
   <!-- RIGHT: METRICS + LOG -->
-
   <div id="rightPanel">
     <div class="rp-section">
       <div class="rp-header">Métricas em Tempo Real</div>
@@ -724,43 +705,39 @@ body::after{
         </div>
       </div>
     </div>
-
-```
-<div class="rp-section">
-  <div class="rp-header">Análise Postural</div>
-  <div id="postureWrap">
-    <div class="posture-row">
-      <div class="posture-name">Cervical</div>
-      <div class="posture-bar-bg"><div class="posture-bar-fill" id="barCervical" style="width:0%;background:var(--green)"></div></div>
-      <div class="posture-deg" id="degCervical">—</div>
+ 
+    <div class="rp-section">
+      <div class="rp-header">Análise Postural</div>
+      <div id="postureWrap">
+        <div class="posture-row">
+          <div class="posture-name">Cervical</div>
+          <div class="posture-bar-bg"><div class="posture-bar-fill" id="barCervical" style="width:0%;background:var(--green)"></div></div>
+          <div class="posture-deg" id="degCervical">—</div>
+        </div>
+        <div class="posture-row">
+          <div class="posture-name">Ombros</div>
+          <div class="posture-bar-bg"><div class="posture-bar-fill" id="barShoulders" style="width:0%;background:var(--green)"></div></div>
+          <div class="posture-deg" id="degShoulders">—</div>
+        </div>
+        <div class="posture-row">
+          <div class="posture-name">Tronco</div>
+          <div class="posture-bar-bg"><div class="posture-bar-fill" id="barTorso" style="width:0%;background:var(--green)"></div></div>
+          <div class="posture-deg" id="degTorso">—</div>
+        </div>
+        <div class="posture-row">
+          <div class="posture-name">Braços</div>
+          <div class="posture-bar-bg"><div class="posture-bar-fill" id="barArms" style="width:0%;background:var(--green)"></div></div>
+          <div class="posture-deg" id="degArms">OK</div>
+        </div>
+      </div>
     </div>
-    <div class="posture-row">
-      <div class="posture-name">Ombros</div>
-      <div class="posture-bar-bg"><div class="posture-bar-fill" id="barShoulders" style="width:0%;background:var(--green)"></div></div>
-      <div class="posture-deg" id="degShoulders">—</div>
-    </div>
-    <div class="posture-row">
-      <div class="posture-name">Tronco</div>
-      <div class="posture-bar-bg"><div class="posture-bar-fill" id="barTorso" style="width:0%;background:var(--green)"></div></div>
-      <div class="posture-deg" id="degTorso">—</div>
-    </div>
-    <div class="posture-row">
-      <div class="posture-name">Braços</div>
-      <div class="posture-bar-bg"><div class="posture-bar-fill" id="barArms" style="width:0%;background:var(--green)"></div></div>
-      <div class="posture-deg" id="degArms">OK</div>
-    </div>
+ 
+    <div class="rp-header" style="padding-top:12px">Log de Eventos</div>
+    <div id="eventLog"></div>
   </div>
 </div>
-
-<div class="rp-header" style="padding-top:12px">Log de Eventos</div>
-<div id="eventLog"></div>
-```
-
-  </div>
-</div>
-
+ 
 <!-- ══ STATUS BAR ══ -->
-
 <div id="statusbar">
   <div class="stb-item" id="stbCam">
     <span class="pill-dot dot-off" id="stbDotCam"></span>CAM
@@ -782,11 +759,10 @@ body::after{
     DESENVOLVIDO POR <span>DANIELA RODRIGUES</span> · THUNBER LAB
   </div>
 </div>
-
+ 
 <!-- ══ CONTROL DRAWER ══ -->
-
 <button id="drawerBtn" onclick="toggleDrawer()">⚙ CONTROLES</button>
-
+ 
 <div id="drawer">
   <button class="ctrl-btn" onclick="toggleCamera()" id="btnCam">▶ CÂMERA</button>
   <button class="ctrl-btn" onclick="loadModels()" id="btnModels">⬇ CARREGAR MODELOS</button>
@@ -810,9 +786,8 @@ body::after{
   <div class="ctrl-sep"></div>
   <button class="ctrl-btn danger-btn" onclick="clearAll()">✕ LIMPAR DADOS</button>
 </div>
-
+ 
 <!-- ══ EXTERNAL PLAYER MODAL ══ -->
-
 <div id="modal">
   <div id="modalCard">
     <div class="modal-header">
@@ -829,9 +804,8 @@ body::after{
     </div>
   </div>
 </div>
-
+ 
 <!-- ══ A-FRAME XR SCENE ══ -->
-
 <div id="xrScene">
 <a-scene
   id="scene"
@@ -845,47 +819,40 @@ body::after{
   <a-entity id="rig" position="0 0 0">
     <a-camera id="xrCamera" position="0 1.6 0" look-controls wasd-controls="enabled:false"></a-camera>
   </a-entity>
-
+ 
   <!-- XR Safety Panel -->
-
   <a-entity id="xrPanel" position="0 1.5 -1.5">
     <a-plane width="1.4" height="1.0" color="#030a14" material="shader:flat;opacity:.93"></a-plane>
-
-```
-<a-text id="xrTitle" value="THUNBER SAFETY" align="center" color="#00e676"
-  position="0 .36 .01" width="1.8" font="https://cdn.aframe.io/fonts/Exo2Bold.fnt"></a-text>
-
-<a-text id="xrLine1" value="— Aguardando —" align="center" color="#3d5a6a"
-  position="0 .18 .01" width="1.5"></a-text>
-<a-text id="xrLine2" value="CAM: off  |  ML: off" align="center" color="#3d5a6a"
-  position="0 .04 .01" width="1.5"></a-text>
-<a-text id="xrLine3" value="Score: —" align="center" color="#3d5a6a"
-  position="0 -.10 .01" width="1.5"></a-text>
-<a-text id="xrLine4" value="Postura: —" align="center" color="#3d5a6a"
-  position="0 -.24 .01" width="1.5"></a-text>
-<a-text id="xrLine5" value="Feito por Daniela Rodrigues" align="center" color="#1a3a2a"
-  position="0 -.40 .01" width="1.5"></a-text>
-
-<!-- Status indicator box -->
-<a-box position=".58 .36 .01" depth=".02" height=".08" width=".10" color="#3d5a6a" id="xrIndicator"></a-box>
-```
-
+ 
+    <a-text id="xrTitle" value="THUNBER SAFETY" align="center" color="#00e676"
+      position="0 .36 .01" width="1.8" font="https://cdn.aframe.io/fonts/Exo2Bold.fnt"></a-text>
+ 
+    <a-text id="xrLine1" value="— Aguardando —" align="center" color="#3d5a6a"
+      position="0 .18 .01" width="1.5"></a-text>
+    <a-text id="xrLine2" value="CAM: off  |  ML: off" align="center" color="#3d5a6a"
+      position="0 .04 .01" width="1.5"></a-text>
+    <a-text id="xrLine3" value="Score: —" align="center" color="#3d5a6a"
+      position="0 -.10 .01" width="1.5"></a-text>
+    <a-text id="xrLine4" value="Postura: —" align="center" color="#3d5a6a"
+      position="0 -.24 .01" width="1.5"></a-text>
+    <a-text id="xrLine5" value="Feito por Daniela Rodrigues" align="center" color="#1a3a2a"
+      position="0 -.40 .01" width="1.5"></a-text>
+ 
+    <!-- Status indicator box -->
+    <a-box position=".58 .36 .01" depth=".02" height=".08" width=".10" color="#3d5a6a" id="xrIndicator"></a-box>
   </a-entity>
-
+ 
   <!-- Alert sphere (flashes on danger) -->
-
-<a-sphere id="xrAlert" position="0 2.2 -1.5" radius=".04" color="#ff1744" opacity="0" emissive="#ff1744" emissive-intensity="1"></a-sphere>
+  <a-sphere id="xrAlert" position="0 2.2 -1.5" radius=".04" color="#ff1744" opacity="0" emissive="#ff1744" emissive-intensity="1"></a-sphere>
 </a-scene>
-
 </div>
-
+ 
 <!-- ══════════════════════════════════════
      JAVASCRIPT — SAFETY VISION ENGINE
 ══════════════════════════════════════ -->
-
 <script>
 "use strict";
-
+ 
 /* ─────────────────────────────────────
    CONFIG
 ───────────────────────────────────── */
@@ -918,7 +885,7 @@ const CFG = {
     { id:"mask",     name:"Máscara",    icon:"😷", cocoClass:null },
   ]
 };
-
+ 
 /* ─────────────────────────────────────
    STATE
 ───────────────────────────────────── */
@@ -929,27 +896,27 @@ const S = {
   modelsReady: false,
   analyzing: false,
   rafId: null,
-
+ 
   // models
   poseModel: null,
   objModel: null,
   faceModel: null,
-
+ 
   // timing
   lastPose: 0, lastObj: 0, lastFace: 0, lastSend: 0,
   fpsCount: 0, fpsStamp: performance.now(), fps: 0,
-
+ 
   // detections
   detections: [],
   poses: [],
   faces: [],
-
+ 
   // safety scores (0-100)
   safetyScore: 100,
   alertCount: 0,
   drowsyFrameCount: 0,
   distractFrameCount: 0,
-
+ 
   // body analysis
   body: {
     personCount: 0,
@@ -960,7 +927,7 @@ const S = {
     ergoLabel: "—",
     postureScore: 100,
   },
-
+ 
   // face analysis
   face: {
     ear: null,         // Eye Aspect Ratio
@@ -969,30 +936,30 @@ const S = {
     emotion: "—",
     headYaw: null,     // looking sideways
   },
-
+ 
   // EPI tracking (heuristic from COCO)
   epi: {},
-
+ 
   // events / timeline
   events: [],
   timeline: [],
-
+ 
   // comms
   ws: null, wsConnected: false,
   channel: null,
-
+ 
   // quality
   quality: "balanced",
-
+ 
   // misc
   drawerOpen: false,
   tickerVisible: false,
   lastAlertMsg: "",
 };
-
+ 
 // Init EPI state
 CFG.epiList.forEach(e => { S.epi[e.id] = { present: false, conf: 0 }; });
-
+ 
 /* ─────────────────────────────────────
    DOM REFS
 ───────────────────────────────────── */
@@ -1013,7 +980,7 @@ const tickerText   = $("tickerText");
 const alertFlash   = $("alertFlash");
 const app          = $("app");
 const soundWave    = $("soundWave");
-
+ 
 // XR
 const xrCamera    = $("xrCamera");
 const xrPanel     = $("xrPanel");
@@ -1023,7 +990,7 @@ const xrLine3     = $("xrLine3");
 const xrLine4     = $("xrLine4");
 const xrIndicator = $("xrIndicator");
 const xrAlert     = $("xrAlert");
-
+ 
 /* ─────────────────────────────────────
    UTILS
 ───────────────────────────────────── */
@@ -1032,9 +999,9 @@ function fmt1(n){ return (n==null||isNaN(n)) ? "—" : n.toFixed(1); }
 function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
 function angleBetween(a,b){ return Math.atan2(b.y-a.y, b.x-a.x)*180/Math.PI; }
 function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
-
+ 
 function setMsg(msg){ $("stbMsg").textContent = msg; console.log("[THB]",msg); }
-
+ 
 function resizeCanvas(){
   const r = videoFeed.getBoundingClientRect();
   overlayCanvas.width  = Math.max(1, Math.floor(r.width));
@@ -1043,9 +1010,9 @@ function resizeCanvas(){
   modalCanvas.width  = Math.max(1, Math.floor(mr.width));
   modalCanvas.height = Math.max(1, Math.floor(mr.height));
 }
-
+ 
 function q(){ return CFG.quality[S.quality]; }
-
+ 
 /* ─────────────────────────────────────
    BOOT SEQUENCE
 ───────────────────────────────────── */
@@ -1058,7 +1025,7 @@ const bootSteps = [
   [95, "Construindo sistema de eventos..."],
   [100,"Sistema pronto — Thunber Safety Vision OS"],
 ];
-
+ 
 async function runBoot(){
   for(const [pct,msg] of bootSteps){
     bootBar.style.width = pct+"%";
@@ -1076,9 +1043,9 @@ async function runBoot(){
   updateXRPanel();
   startClock();
 }
-
+ 
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
-
+ 
 /* ─────────────────────────────────────
    CLOCK
 ───────────────────────────────────── */
@@ -1089,14 +1056,14 @@ function startClock(){
       d.toLocaleTimeString("pt-BR",{hour12:false});
   },1000);
 }
-
+ 
 /* ─────────────────────────────────────
    CAMERA
 ───────────────────────────────────── */
 async function toggleCamera(){
   if(S.cameraReady){ stopCamera(); } else { await startCamera(); }
 }
-
+ 
 async function startCamera(){
   if(S.stream){ setMsg("Câmera já ativa."); return; }
   try{
@@ -1124,7 +1091,7 @@ async function startCamera(){
     pushLog("Falha ao iniciar câmera.", "danger");
   }
 }
-
+ 
 function stopCamera(){
   if(!S.stream){ return; }
   S.stream.getTracks().forEach(t=>t.stop());
@@ -1139,7 +1106,7 @@ function stopCamera(){
   pushLog("Câmera parada.", "info");
   updateStatusBar();
 }
-
+ 
 /* ─────────────────────────────────────
    MODEL LOADING
 ───────────────────────────────────── */
@@ -1148,22 +1115,22 @@ async function loadModels(){
   if(S.modelsLoading){ return; }
   S.modelsLoading = true;
   setMsg("Carregando modelos...");
-
+ 
   try{
     await tf.ready();
     pushLog("TensorFlow.js pronto. Backend: "+tf.getBackend(), "info");
-
+ 
     setMsg("Carregando COCO-SSD...");
     S.objModel = await cocoSsd.load({ base:"lite_mobilenet_v2" });
     pushLog("COCO-SSD carregado.", "ok");
-
+ 
     setMsg("Carregando MoveNet (pose)...");
     S.poseModel = await poseDetection.createDetector(
       poseDetection.SupportedModels.MoveNet,
       { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING, enableSmoothing:true }
     );
     pushLog("MoveNet pose carregado.", "ok");
-
+ 
     // Face Landmarks (optional — may not load on all devices)
     try{
       setMsg("Carregando Face Landmarks...");
@@ -1176,7 +1143,7 @@ async function loadModels(){
       pushLog("Face Landmarks indisponível — análise facial simplificada.", "warn");
       S.faceModel = null;
     }
-
+ 
     S.modelsReady = true;
     S.modelsLoading = false;
     setMsg("Todos os modelos prontos.");
@@ -1192,14 +1159,14 @@ async function loadModels(){
     pushLog("Falha ao carregar modelos: "+e.message, "danger");
   }
 }
-
+ 
 /* ─────────────────────────────────────
    ANALYSIS LOOP
 ───────────────────────────────────── */
 function toggleAnalysis(){
   if(S.analyzing){ stopAnalysis(); } else { startAnalysis(); }
 }
-
+ 
 function startAnalysis(){
   if(!S.cameraReady){ setMsg("Inicie a câmera primeiro."); return; }
   if(!S.modelsReady){ setMsg("Carregue os modelos primeiro."); return; }
@@ -1211,7 +1178,7 @@ function startAnalysis(){
   updateStatusBar();
   S.rafId = requestAnimationFrame(loop);
 }
-
+ 
 function stopAnalysis(){
   if(!S.analyzing){ return; }
   S.analyzing = false;
@@ -1221,28 +1188,28 @@ function stopAnalysis(){
   pushEvent("analysis_stopped");
   updateStatusBar();
 }
-
+ 
 async function loop(){
   if(!S.analyzing) return;
-
+ 
   try{
     if(S.cameraReady && hiddenVideo.readyState >= 2){
       const t = now();
       const cfg = q();
-
+ 
       if(t - S.lastObj  >= cfg.objMs)  { S.lastObj  = t; await runObjectDetection(); }
       if(t - S.lastPose >= cfg.poseMs) { S.lastPose = t; await runPoseDetection(); }
       if(t - S.lastFace >= cfg.faceMs) { S.lastFace = t; await runFaceAnalysis(); }
-
+ 
       drawFrame();
       computeSafetyScore();
       updateUI();
-
+ 
       if(t - S.lastSend >= cfg.sendMs){ S.lastSend = t; sendExternal(); }
-
+ 
       pushTimelineFrame();
     }
-
+ 
     // FPS
     S.fpsCount++;
     const now_ = now();
@@ -1252,12 +1219,12 @@ async function loop(){
       S.fpsStamp = now_;
       $("fpsDisplay").textContent = S.fps;
     }
-
+ 
   } catch(e){ console.error(e); }
-
+ 
   S.rafId = requestAnimationFrame(loop);
 }
-
+ 
 /* ─────────────────────────────────────
    OBJECT DETECTION
 ───────────────────────────────────── */
@@ -1265,9 +1232,9 @@ async function runObjectDetection(){
   if(!S.objModel) return;
   const preds = await S.objModel.detect(hiddenVideo, 10);
   S.detections = preds.sort((a,b)=>b.score-a.score);
-
+ 
   S.body.personCount = S.detections.filter(d=>d.class==="person").length;
-
+ 
   // Heuristic EPI detection from COCO classes
   // glasses → safety glasses proxy, tie → vest proxy, etc.
   resetEPI();
@@ -1280,7 +1247,7 @@ async function runObjectDetection(){
     if(d.class==="glasses" || d.class==="sunglasses") markEPI("glasses", d.score);
   });
 }
-
+ 
 function resetEPI(){
   // Fade out EPI confidence slowly (don't snap to zero each frame)
   Object.keys(S.epi).forEach(k=>{
@@ -1288,11 +1255,11 @@ function resetEPI(){
     if(S.epi[k].conf < 0.1) S.epi[k].present = false;
   });
 }
-
+ 
 function markEPI(id, conf){
   if(S.epi[id]){ S.epi[id].present = true; S.epi[id].conf = conf; }
 }
-
+ 
 /* ─────────────────────────────────────
    POSE DETECTION + ERGONOMICS
 ───────────────────────────────────── */
@@ -1303,57 +1270,57 @@ async function runPoseDetection(){
   if(S.poses[0]) analyzePosture(S.poses[0]);
   else { S.body.ergoLabel="Sem pose"; S.body.postureScore=100; }
 }
-
+ 
 function analyzePosture(pose){
   const kp = {};
   pose.keypoints.forEach(k=>{ kp[k.name]=k; });
-
+ 
   const ls = kp.left_shoulder, rs = kp.right_shoulder;
   const lh = kp.left_hip,  rh = kp.right_hip;
   const lw = kp.left_wrist, rw = kp.right_wrist;
   const nose = kp.nose;
-
+ 
   if(!ls||!rs||!lh||!rh){ S.body.ergoLabel="Pose parcial"; return; }
-
+ 
   // Shoulders angle
   const shouldAngle = Math.abs(angleBetween(ls,rs));
   S.body.shouldersDeg = shouldAngle;
-
+ 
   // Torso lean
   const sMid = { x:(ls.x+rs.x)/2, y:(ls.y+rs.y)/2 };
   const hMid = { x:(lh.x+rh.x)/2, y:(lh.y+rh.y)/2 };
   const torso = Math.abs(angleBetween(sMid,hMid)+90);
   S.body.torsoDeg = torso;
-
+ 
   // Head tilt (cervical)
   if(nose && (nose.score||1)>0.3){
     S.body.headTiltDeg = Math.abs(angleBetween(sMid,nose)+90);
   }
-
+ 
   // Arms elevated
   S.body.armsElevated = !!(lw && rw && lw.y < ls.y && rw.y < rs.y);
-
+ 
   // Score postura
   let issues = 0;
   let labels = [];
-
+ 
   if(shouldAngle > CFG.thresholds.shouldersCrit){ issues+=3; labels.push("Ombros críticos"); }
   else if(shouldAngle > CFG.thresholds.shouldersWarn){ issues+=1; labels.push("Ombros desnivelados"); }
-
+ 
   if(torso > CFG.thresholds.torsoCrit){ issues+=3; labels.push("Tronco crítico"); }
   else if(torso > CFG.thresholds.torsoWarn){ issues+=1; labels.push("Tronco inclinado"); }
-
+ 
   if(S.body.headTiltDeg){
     if(S.body.headTiltDeg > CFG.thresholds.headTiltCrit){ issues+=2; labels.push("Cervical crítica"); }
     else if(S.body.headTiltDeg > CFG.thresholds.headTiltWarn){ issues+=1; labels.push("Inclinação cervical"); }
   }
-
+ 
   if(S.body.armsElevated){ issues+=1; labels.push("Braços elevados"); }
-
+ 
   S.body.ergoLabel = labels.length ? labels[0] : "Postura OK";
   S.body.postureScore = clamp(100 - issues*18, 0, 100);
 }
-
+ 
 /* ─────────────────────────────────────
    FACE ANALYSIS (drowsiness / emotion)
 ───────────────────────────────────── */
@@ -1370,21 +1337,21 @@ async function runFaceAnalysis(){
     fallbackFaceAnalysis();
   }
 }
-
+ 
 function analyzeFaceLandmarks(face){
   const kp = face.keypoints || [];
-
+ 
   // Eye landmarks indices (MediaPipe FaceMesh)
   // Left eye: 362,385,387,263,373,380
   // Right eye: 33,160,158,133,153,144
   const leftEye  = [362,385,387,263,373,380].map(i=>kp[i]).filter(Boolean);
   const rightEye = [33,160,158,133,153,144].map(i=>kp[i]).filter(Boolean);
-
+ 
   if(leftEye.length===6 && rightEye.length===6){
     const earL = computeEAR(leftEye);
     const earR = computeEAR(rightEye);
     S.face.ear = (earL+earR)/2;
-
+ 
     if(S.face.ear < CFG.thresholds.drowsyEAR){
       S.drowsyFrameCount = Math.min(S.drowsyFrameCount+1, CFG.thresholds.drowsyFrames+5);
     } else {
@@ -1392,14 +1359,14 @@ function analyzeFaceLandmarks(face){
     }
     S.face.isDrowsy = S.drowsyFrameCount >= CFG.thresholds.drowsyFrames;
   }
-
+ 
   // Head yaw — nose tip vs midpoint
   const nose = kp[1], leftCheek = kp[234], rightCheek = kp[454];
   if(nose && leftCheek && rightCheek){
     const midX = (leftCheek.x + rightCheek.x)/2;
     const yaw = ((nose.x - midX) / ((rightCheek.x - leftCheek.x) || 1)) * 100;
     S.face.headYaw = yaw;
-
+ 
     if(Math.abs(yaw) > 30){
       S.distractFrameCount = Math.min(S.distractFrameCount+1, CFG.thresholds.attentionFrames+5);
     } else {
@@ -1407,11 +1374,11 @@ function analyzeFaceLandmarks(face){
     }
     S.face.isDistracted = S.distractFrameCount >= CFG.thresholds.attentionFrames;
   }
-
+ 
   // Simple emotion heuristic from mouth landmarks
   S.face.emotion = estimateEmotion(kp);
 }
-
+ 
 function computeEAR(eye){
   // EAR = (||p2-p6|| + ||p3-p5||) / (2 * ||p1-p4||)
   if(eye.length < 6) return 0.3;
@@ -1420,7 +1387,7 @@ function computeEAR(eye){
   const h  = dist(eye[0],eye[3]);
   return (v1+v2)/(2*(h||1));
 }
-
+ 
 function estimateEmotion(kp){
   if(!kp || kp.length < 14) return "—";
   // Mouth corners: 61 (left), 291 (right), 13 (top), 14 (bottom)
@@ -1434,7 +1401,7 @@ function estimateEmotion(kp){
   if(mL.y > mT.y*1.01 && mR.y > mT.y*1.01) return "Tenso";
   return "Neutro";
 }
-
+ 
 function fallbackFaceAnalysis(){
   // Without face model, use pose nose + eye keypoints from MoveNet
   if(!S.poses[0]) { resetFaceState(); return; }
@@ -1461,7 +1428,7 @@ function fallbackFaceAnalysis(){
   }
   S.face.emotion = "—";
 }
-
+ 
 function resetFaceState(){
   S.face.isDrowsy = false;
   S.face.isDistracted = false;
@@ -1470,14 +1437,14 @@ function resetFaceState(){
   S.drowsyFrameCount = 0;
   S.distractFrameCount = 0;
 }
-
+ 
 /* ─────────────────────────────────────
    SAFETY SCORE
 ───────────────────────────────────── */
 function computeSafetyScore(){
   let score = 100;
   const alerts = [];
-
+ 
   if(S.face.isDrowsy){
     score -= 40;
     alerts.push({ msg:"⚠ SONOLÊNCIA DETECTADA — Risco de acidente imediato!", level:"danger" });
@@ -1499,10 +1466,10 @@ function computeSafetyScore(){
   if(S.body.armsElevated){
     score -= 5;
   }
-
+ 
   score = clamp(Math.round(score), 0, 100);
   S.safetyScore = score;
-
+ 
   // Manage alerts
   if(alerts.length > 0){
     const top = alerts[0];
@@ -1522,7 +1489,7 @@ function computeSafetyScore(){
     soundWave.classList.remove("active");
   }
 }
-
+ 
 /* ─────────────────────────────────────
    ALERTS
 ───────────────────────────────────── */
@@ -1542,7 +1509,7 @@ function playBeep(level){
     beepTimeout = setTimeout(()=>{ beepTimeout=null; }, level==="danger"?1500:3000);
   } catch(e){}
 }
-
+ 
 function showTicker(msg, level="warn"){
   tickerText.textContent = msg;
   alertTicker.classList.add("visible");
@@ -1553,13 +1520,13 @@ function showTicker(msg, level="warn"){
   S.tickerVisible = true;
   app.classList.add("ticker-open");
 }
-
+ 
 function dismissTicker(){
   alertTicker.classList.remove("visible");
   S.tickerVisible = false;
   app.classList.remove("ticker-open");
 }
-
+ 
 let flashTimer = null;
 function flashAlert(level){
   if(level==="danger"){
@@ -1570,18 +1537,18 @@ function flashAlert(level){
   clearTimeout(flashTimer);
   flashTimer = setTimeout(()=>{ alertFlash.className=""; }, 800);
 }
-
+ 
 /* ─────────────────────────────────────
    DRAWING
 ───────────────────────────────────── */
 function drawFrame(){
   if(!overlayCanvas.width) return;
   ctx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
-
+ 
   if(S.detections.length) drawDetections(ctx, overlayCanvas, S.detections);
   if(S.poses[0])          drawPose(ctx, overlayCanvas, S.poses[0]);
   if(S.faces[0])          drawFaceBox(ctx, overlayCanvas, S.faces[0]);
-
+ 
   // Modal canvas
   if(modal.classList.contains("open") && modalCanvas.width){
     mctx.clearRect(0,0,modalCanvas.width,modalCanvas.height);
@@ -1591,14 +1558,14 @@ function drawFrame(){
     drawErgoOverlay(mctx, modalCanvas);
   }
 }
-
+ 
 function scaleX(x, canvas){
   return canvas.width - (x * canvas.width / (hiddenVideo.videoWidth||1));
 }
 function scaleY(y, canvas){
   return y * canvas.height / (hiddenVideo.videoHeight||1);
 }
-
+ 
 function drawDetections(c, canvas, preds){
   if(!hiddenVideo.videoWidth) return;
   preds.forEach(pred=>{
@@ -1609,11 +1576,11 @@ function drawDetections(c, canvas, preds){
     const dh = bh * canvas.height/hiddenVideo.videoHeight;
     const isPerson = pred.class==="person";
     const col = isPerson ? "#f50057" : "#00e5ff";
-
+ 
     c.strokeStyle = col;
     c.lineWidth = isPerson ? 2.5 : 1.5;
     c.strokeRect(dx,dy,dw,dh);
-
+ 
     // Corner accents
     const cs = 10;
     c.strokeStyle = col;
@@ -1621,7 +1588,7 @@ function drawDetections(c, canvas, preds){
     [[dx,dy,1,1],[dx+dw,dy,-1,1],[dx,dy+dh,1,-1],[dx+dw,dy+dh,-1,-1]].forEach(([cx,cy,sx,sy])=>{
       c.beginPath(); c.moveTo(cx,cy+sy*cs); c.lineTo(cx,cy); c.lineTo(cx+sx*cs,cy); c.stroke();
     });
-
+ 
     // Label
     const label = `${pred.class} ${(pred.score*100).toFixed(0)}%`;
     c.font = "bold 12px 'Share Tech Mono',monospace";
@@ -1632,11 +1599,11 @@ function drawDetections(c, canvas, preds){
     c.fillText(label, dx+6, Math.max(13,dy-5));
   });
 }
-
+ 
 function drawPose(c, canvas, pose){
   const kp = {};
   pose.keypoints.forEach(k=>{ kp[k.name]=k; });
-
+ 
   const skeleton = [
     ["left_shoulder","right_shoulder","#00e676"],
     ["left_shoulder","left_elbow","#00e676"],
@@ -1653,7 +1620,7 @@ function drawPose(c, canvas, pose){
     ["left_ear","left_shoulder","#ffb300"],
     ["right_ear","right_shoulder","#ffb300"],
   ];
-
+ 
   skeleton.forEach(([a,b,col])=>{
     const pa=kp[a], pb=kp[b];
     if(!pa||!pb||(pa.score||1)<.2||(pb.score||1)<.2) return;
@@ -1664,7 +1631,7 @@ function drawPose(c, canvas, pose){
     c.lineTo(scaleX(pb.x,canvas), scaleY(pb.y,canvas));
     c.stroke();
   });
-
+ 
   pose.keypoints.forEach(k=>{
     if((k.score||1)<.2) return;
     const isFace = ["nose","left_eye","right_eye","left_ear","right_ear"].includes(k.name);
@@ -1674,13 +1641,13 @@ function drawPose(c, canvas, pose){
     c.arc(scaleX(k.x,canvas), scaleY(k.y,canvas), isFace?4:3, 0, Math.PI*2);
     c.fill();
   });
-
+ 
   // Posture warning overlay
   if(S.body.torsoDeg > CFG.thresholds.torsoWarn){
     drawPostureWarning(c, canvas, kp);
   }
 }
-
+ 
 function drawPostureWarning(c, canvas, kp){
   const ls=kp.left_shoulder, rs=kp.right_shoulder;
   if(!ls||!rs) return;
@@ -1695,7 +1662,7 @@ function drawPostureWarning(c, canvas, kp){
   c.fillStyle = "#020407";
   c.fillText(label, mx-tw/2, my-1);
 }
-
+ 
 function drawFaceBox(c, canvas, face){
   if(!face.box) return;
   const {xMin,yMin,width,height} = face.box;
@@ -1703,20 +1670,20 @@ function drawFaceBox(c, canvas, face){
   const dy = yMin*canvas.height/hiddenVideo.videoHeight;
   const dw = width*canvas.width/hiddenVideo.videoWidth;
   const dh = height*canvas.height/hiddenVideo.videoHeight;
-
+ 
   const col = S.face.isDrowsy ? "#ff1744" : S.face.isDistracted ? "#ffb300" : "#00e5ff";
   c.strokeStyle = col+"aa";
   c.lineWidth = 1.5;
   c.setLineDash([4,3]);
   c.strokeRect(dx,dy,dw,dh);
   c.setLineDash([]);
-
+ 
   // drowsy / distract label
   let faceLabel = "";
   if(S.face.isDrowsy) faceLabel = "⚠ SONOLENTO";
   else if(S.face.isDistracted) faceLabel = "⚠ DISTRAÍDO";
   else if(S.face.emotion && S.face.emotion!=="—") faceLabel = S.face.emotion;
-
+ 
   if(faceLabel){
     c.font = "bold 11px 'Share Tech Mono',monospace";
     const tw = c.measureText(faceLabel).width;
@@ -1726,7 +1693,7 @@ function drawFaceBox(c, canvas, face){
     c.fillText(faceLabel, dx+6, Math.max(13,dy-5));
   }
 }
-
+ 
 function drawErgoOverlay(c, canvas){
   const pad=14, lh=16;
   const lines=[
@@ -1744,7 +1711,7 @@ function drawErgoOverlay(c, canvas){
     c.fillText(line, pad+4, canvas.height-pad-(lines.length-i-1)*lh);
   });
 }
-
+ 
 /* ─────────────────────────────────────
    UI UPDATES
 ───────────────────────────────────── */
@@ -1755,7 +1722,7 @@ function updateUI(){
   updateErgoDisplay();
   updateXRPanel();
 }
-
+ 
 function updateSafetyRing(){
   const score = S.safetyScore;
   const circ = 2*Math.PI*54;
@@ -1766,17 +1733,17 @@ function updateSafetyRing(){
   arc.style.stroke = col;
   $("ringScore").textContent = score;
   $("ringScore").style.fill = col;
-
+ 
   const statusEl = $("scoreStatus");
   if(score>=80){ statusEl.textContent="SEGURO"; statusEl.style.color="var(--green)"; }
   else if(score>=60){ statusEl.textContent="ATENÇÃO"; statusEl.style.color="var(--amber)"; }
   else { statusEl.textContent="PERIGO"; statusEl.style.color="var(--red)"; }
 }
-
+ 
 function buildDetectionCards(){
   const list = $("detectionList");
   list.innerHTML="";
-
+ 
   const items = [
     { id:"drowsy",   icon:"😴", name:"Sonolência",  desc:"Análise EAR / olhos" },
     { id:"distract", icon:"👁",  name:"Distração",   desc:"Desvio de atenção" },
@@ -1785,7 +1752,7 @@ function buildDetectionCards(){
     { id:"person",   icon:"👤",  name:"Pessoas",     desc:"Detecção COCO-SSD" },
     ...CFG.epiList.map(e=>({ id:"epi_"+e.id, icon:e.icon, name:e.name, desc:"EPI / Segurança" })),
   ];
-
+ 
   items.forEach(item=>{
     const card = document.createElement("div");
     card.className = "det-card inactive";
@@ -1802,7 +1769,7 @@ function buildDetectionCards(){
     list.appendChild(card);
   });
 }
-
+ 
 function updateDetectionCards(){
   // Drowsiness
   updateCard("drowsy",
@@ -1812,7 +1779,7 @@ function updateDetectionCards(){
     S.drowsyFrameCount/CFG.thresholds.drowsyFrames*100,
     `EAR: ${fmt1(S.face.ear)} | Frames: ${S.drowsyFrameCount}`
   );
-
+ 
   // Distraction
   updateCard("distract",
     S.face.isDistracted,
@@ -1821,7 +1788,7 @@ function updateDetectionCards(){
     S.distractFrameCount/CFG.thresholds.attentionFrames*100,
     `Yaw: ${fmt1(S.face.headYaw)}°`
   );
-
+ 
   // Posture
   const pBad = S.body.postureScore < 80;
   updateCard("posture",
@@ -1831,7 +1798,7 @@ function updateDetectionCards(){
     100-S.body.postureScore,
     `Score: ${S.body.postureScore}`
   );
-
+ 
   // Emotion
   updateCard("emotion",
     false,
@@ -1840,7 +1807,7 @@ function updateDetectionCards(){
     0,
     "Análise facial"
   );
-
+ 
   // Persons
   const np = S.body.personCount;
   updateCard("person",
@@ -1850,7 +1817,7 @@ function updateDetectionCards(){
     clamp(np*30,0,100),
     `COCO-SSD`
   );
-
+ 
   // EPI
   CFG.epiList.forEach(e=>{
     const st = S.epi[e.id];
@@ -1863,44 +1830,44 @@ function updateDetectionCards(){
     );
   });
 }
-
+ 
 function updateCard(id, isAlert, statusText, level, confPct, desc){
   const card  = $("card_"+id);
   const badge = $("db_"+id);
   const ds    = $("ds_"+id);
   const cf    = $("cf_"+id);
   if(!card) return;
-
+ 
   card.className = "det-card "+(level==="danger"?"danger":level==="warn"?"warn":level==="ok"?"":"inactive");
   badge.className = "det-badge "+(level==="danger"?"badge-danger":level==="warn"?"badge-warn":level==="ok"?"badge-ok":"badge-off");
   badge.textContent = statusText;
   ds.textContent = desc;
-
+ 
   const fillClass = level==="danger"?"fill-red":level==="warn"?"fill-amber":"fill-green";
   cf.className = "conf-fill "+fillClass;
   cf.style.width = clamp(confPct,0,100)+"%";
 }
-
+ 
 function updateMetrics(){
   const mP = $("mPersons");
   mP.textContent = S.body.personCount;
   mP.className = "mc-val "+(S.body.personCount>0?"green":"");
-
+ 
   const mA = $("mAlerts");
   mA.textContent = S.alertCount;
   mA.className = "mc-val "+(S.alertCount>10?"red":S.alertCount>3?"amber":"");
-
+ 
   const ht = $("mHeadTilt");
   ht.textContent = fmt1(S.body.headTiltDeg)+"°";
   ht.className = "mc-val "+(S.body.headTiltDeg>CFG.thresholds.headTiltCrit?"red":S.body.headTiltDeg>CFG.thresholds.headTiltWarn?"amber":"");
-
+ 
   const tor = $("mTorso");
   tor.textContent = fmt1(S.body.torsoDeg)+"°";
   tor.className = "mc-val "+(S.body.torsoDeg>CFG.thresholds.torsoCrit?"red":S.body.torsoDeg>CFG.thresholds.torsoWarn?"amber":"");
-
+ 
   updatePostureBars();
 }
-
+ 
 function updatePostureBars(){
   function setBar(barId, degId, val, warnT, critT){
     const pct = clamp((val||0)/60*100, 0, 100);
@@ -1912,12 +1879,12 @@ function updatePostureBars(){
   setBar("barCervical","degCervical",S.body.headTiltDeg, CFG.thresholds.headTiltWarn, CFG.thresholds.headTiltCrit);
   setBar("barShoulders","degShoulders",S.body.shouldersDeg, CFG.thresholds.shouldersWarn, CFG.thresholds.shouldersCrit);
   setBar("barTorso","degTorso",S.body.torsoDeg, CFG.thresholds.torsoWarn, CFG.thresholds.torsoCrit);
-
+ 
   const ab = $("barArms"); const ad = $("degArms");
   if(ab){ ab.style.width=S.body.armsElevated?"100%":"0%"; ab.style.background=S.body.armsElevated?"var(--amber)":"var(--green)"; }
   if(ad){ ad.textContent=S.body.armsElevated?"ELEVADOS":"OK"; ad.style.color=S.body.armsElevated?"var(--amber)":"var(--green)"; }
 }
-
+ 
 function updateErgoDisplay(){
   function setErgo(id, val, warnVal, critVal, goodTxt, warnTxt, critTxt){
     const el = $(id); if(!el) return;
@@ -1928,31 +1895,31 @@ function updateErgoDisplay(){
     else if(val >= warnVal){ el.textContent=warnTxt; el.className="ergo-val warn-val"; }
     else { el.textContent=goodTxt; el.className="ergo-val ok-val"; }
   }
-
+ 
   // Drowsiness
   const dEl = $("ergoSleep");
   if(S.face.isDrowsy){ dEl.textContent="SONOLENTO"; dEl.className="ergo-val danger-val"; }
   else if(S.drowsyFrameCount>5){ dEl.textContent="MONITORANDO"; dEl.className="ergo-val warn-val"; }
   else { dEl.textContent="ALERTA"; dEl.className="ergo-val ok-val"; }
-
+ 
   // Attention
   const aEl = $("ergoAttention");
   if(S.face.isDistracted){ aEl.textContent="DISTRAÍDO"; aEl.className="ergo-val danger-val"; }
   else if(S.distractFrameCount>8){ aEl.textContent="MONITORANDO"; aEl.className="ergo-val warn-val"; }
   else { aEl.textContent="FOCADO"; aEl.className="ergo-val ok-val"; }
-
+ 
   // Posture
   const pEl = $("ergoPosture");
   if(S.body.postureScore>=80){ pEl.textContent="BOA"; pEl.className="ergo-val ok-val"; }
   else if(S.body.postureScore>=60){ pEl.textContent="ATENÇÃO"; pEl.className="ergo-val warn-val"; }
   else { pEl.textContent="RUIM"; pEl.className="ergo-val danger-val"; }
-
+ 
   // Mood/Emotion
   const mEl = $("ergoMood");
   mEl.textContent = S.face.emotion||"—";
   mEl.className = "ergo-val"+(S.face.emotion==="Tenso"?" warn-val":"");
 }
-
+ 
 /* ─────────────────────────────────────
    STATUS BAR
 ───────────────────────────────────── */
@@ -1971,12 +1938,12 @@ function updateStatusBar(){
   setPill("pillModels","dotModels","stbModels","stbDotModels", S.modelsReady);
   const analysisLevel = S.safetyScore<60?"danger":S.safetyScore<80?"warn":"ok";
   setPill("pillAnalysis","dotAnalysis","stbAnalysis","stbDotAnalysis", S.analyzing, analysisLevel);
-
+ 
   const wsEl = $("stbWS"), wsDot = $("stbDotWS");
   if(wsEl) wsEl.className = "stb-item "+(S.wsConnected?"on":"");
   if(wsDot) wsDot.className = "pill-dot "+(S.wsConnected?"dot-green":"dot-off");
 }
-
+ 
 /* ─────────────────────────────────────
    XR PANEL
 ───────────────────────────────────── */
@@ -1986,17 +1953,17 @@ function updateXRPanel(){
   xrLine2.setAttribute("value", `CAM:${S.cameraReady?"on":"off"} | ML:${S.modelsReady?"on":"off"} | FPS:${S.fps}`);
   xrLine3.setAttribute("value", `Score: ${S.safetyScore}/100`);
   xrLine4.setAttribute("value", `Tronco:${fmt1(S.body.torsoDeg)}° | Cervical:${fmt1(S.body.headTiltDeg)}°`);
-
+ 
   const col = S.safetyScore>=80?"#00e676":S.safetyScore>=60?"#ffb300":"#ff1744";
   if(xrIndicator) xrIndicator.setAttribute("color", S.analyzing ? col : "#3d5a6a");
-
+ 
   // Alert sphere
   if(xrAlert){
     const isAlert = S.face.isDrowsy || S.face.isDistracted;
     xrAlert.setAttribute("opacity", isAlert?"0.9":"0");
   }
 }
-
+ 
 function recenterXRPanel(){
   if(!xrCamera||!xrPanel) return;
   const cam = xrCamera.object3D;
@@ -2007,7 +1974,7 @@ function recenterXRPanel(){
   const target = cam.position.clone(); target.y = pos.y;
   xrPanel.object3D.lookAt(target);
 }
-
+ 
 /* ─────────────────────────────────────
    EVENTS / TIMELINE
 ───────────────────────────────────── */
@@ -2015,7 +1982,7 @@ function pushEvent(type, payload={}){
   S.events.push({ t:Date.now(), type, payload });
   if(S.events.length > CFG.maxEvents) S.events.shift();
 }
-
+ 
 function pushLog(msg, level="info"){
   const log = $("eventLog"); if(!log) return;
   const now_ = new Date();
@@ -2026,7 +1993,7 @@ function pushLog(msg, level="info"){
   log.insertBefore(entry, log.firstChild);
   while(log.children.length > 80) log.removeChild(log.lastChild);
 }
-
+ 
 function pushTimelineFrame(){
   S.timeline.push({
     t: Date.now(),
@@ -2038,7 +2005,7 @@ function pushTimelineFrame(){
   });
   if(S.timeline.length > CFG.maxTimeline) S.timeline.shift();
 }
-
+ 
 /* ─────────────────────────────────────
    EXPORT / IMPORT
 ───────────────────────────────────── */
@@ -2061,7 +2028,7 @@ function exportJSON(){
   a.click();
   setMsg("Dados exportados.");
 }
-
+ 
 $("importInput").addEventListener("change", e=>{
   const f = e.target.files?.[0]; if(!f) return;
   const r = new FileReader();
@@ -2076,14 +2043,14 @@ $("importInput").addEventListener("change", e=>{
   r.readAsText(f);
   $("importInput").value="";
 });
-
+ 
 /* ─────────────────────────────────────
    EXTERNAL MONITOR
 ───────────────────────────────────── */
 function ensureChannel(){
   if(!S.channel) S.channel = new BroadcastChannel(CFG.channelName);
 }
-
+ 
 function openMonitorWindow(){
   ensureChannel();
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Thunber Monitor</title>
@@ -2095,7 +2062,6 @@ img{width:100%;display:block;border-radius:8px;background:#000}
 pre{font-size:11px;color:#4a7a8a;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto}
 .score{font-size:48px;font-weight:900;color:#00e676;line-height:1}
 </style></head><body><div class="w">
-
 <div class="card"><h2>THUNBER SAFETY MONITOR</h2><div class="credit">Desenvolvido por Daniela Rodrigues</div></div>
 <div class="card"><img id="img" alt="feed"/></div>
 <div class="card"><div class="score" id="score">—</div><div style="font-size:10px;color:#3d5a6a;letter-spacing:2px">SAFETY SCORE</div></div>
@@ -2112,102 +2078,101 @@ ch.onmessage=e=>{
   window.open(url,"_blank","width=700,height=900");
   pushLog("Monitor externo aberto.", "info");
 }
-
+ 
 function sendExternal(){
-if(!S.channel && !S.ws) return;
-let image = null;
-if(hiddenVideo.videoWidth){
-const tmp=document.createElement(“canvas”);
-tmp.width=480; tmp.height=Math.round(hiddenVideo.videoHeight/hiddenVideo.videoWidth*480);
-tmp.getContext(“2d”).drawImage(hiddenVideo,0,0,tmp.width,tmp.height);
-image=tmp.toDataURL(“image/jpeg”,0.6);
+  if(!S.channel && !S.ws) return;
+  let image = null;
+  if(hiddenVideo.videoWidth){
+    const tmp=document.createElement("canvas");
+    tmp.width=480; tmp.height=Math.round(hiddenVideo.videoHeight/hiddenVideo.videoWidth*480);
+    tmp.getContext("2d").drawImage(hiddenVideo,0,0,tmp.width,tmp.height);
+    image=tmp.toDataURL("image/jpeg",0.6);
+  }
+  const payload={ type:"frame", score:S.safetyScore, image, face:{...S.face}, body:{...S.body}, alertCount:S.alertCount };
+  if(S.channel) S.channel.postMessage(payload);
+  if(S.ws && S.ws.readyState===1){
+    try{ S.ws.send(JSON.stringify(payload)); } catch(e){}
+  }
 }
-const payload={ type:“frame”, score:S.safetyScore, image, face:{…S.face}, body:{…S.body}, alertCount:S.alertCount };
-if(S.channel) S.channel.postMessage(payload);
-if(S.ws && S.ws.readyState===1){
-try{ S.ws.send(JSON.stringify(payload)); } catch(e){}
-}
-}
-
+ 
 /* ─────────────────────────────────────
-WEBSOCKET
+   WEBSOCKET
 ───────────────────────────────────── */
 function connectWS(){
-const url=$(“wsUrl”).value.trim();
-if(!url){ setMsg(“Informe a URL WebSocket.”); return; }
-try{
-S.ws=new WebSocket(url);
-S.ws.onopen=()=>{ S.wsConnected=true; pushLog(“WS conectado.”,“ok”); updateStatusBar(); };
-S.ws.onclose=()=>{ S.wsConnected=false; pushLog(“WS desconectado.”,“warn”); updateStatusBar(); };
-S.ws.onerror=()=>{ pushLog(“Erro WS.”,“danger”); };
-S.ws.onmessage=e=>{ try{ const d=JSON.parse(e.data); if(d.type===“ping”) S.ws.send(JSON.stringify({type:“pong”,t:Date.now()})); }catch(err){} };
-} catch(e){ setMsg(“Falha WS: “+e.message); }
+  const url=$("wsUrl").value.trim();
+  if(!url){ setMsg("Informe a URL WebSocket."); return; }
+  try{
+    S.ws=new WebSocket(url);
+    S.ws.onopen=()=>{ S.wsConnected=true; pushLog("WS conectado.","ok"); updateStatusBar(); };
+    S.ws.onclose=()=>{ S.wsConnected=false; pushLog("WS desconectado.","warn"); updateStatusBar(); };
+    S.ws.onerror=()=>{ pushLog("Erro WS.","danger"); };
+    S.ws.onmessage=e=>{ try{ const d=JSON.parse(e.data); if(d.type==="ping") S.ws.send(JSON.stringify({type:"pong",t:Date.now()})); }catch(err){} };
+  } catch(e){ setMsg("Falha WS: "+e.message); }
 }
-
+ 
 /* ─────────────────────────────────────
-MISC CONTROLS
+   MISC CONTROLS
 ───────────────────────────────────── */
 function toggleDrawer(){
-S.drawerOpen = !S.drawerOpen;
-$(“drawer”).classList.toggle(“open”, S.drawerOpen);
-$(“drawerBtn”).textContent = S.drawerOpen ? “✕ FECHAR” : “⚙ CONTROLES”;
+  S.drawerOpen = !S.drawerOpen;
+  $("drawer").classList.toggle("open", S.drawerOpen);
+  $("drawerBtn").textContent = S.drawerOpen ? "✕ FECHAR" : "⚙ CONTROLES";
 }
-
+ 
 function openModal(){
-modal.classList.add(“open”);
-resizeCanvas();
+  modal.classList.add("open");
+  resizeCanvas();
 }
-function closeModal(){ modal.classList.remove(“open”); }
-
-function changeQuality(val){ S.quality=val; pushLog(“Qualidade: “+val,“info”); }
-
+function closeModal(){ modal.classList.remove("open"); }
+ 
+function changeQuality(val){ S.quality=val; pushLog("Qualidade: "+val,"info"); }
+ 
 function clearAll(){
-S.timeline=[]; S.events=[]; S.alertCount=0; S.drowsyFrameCount=0; S.distractFrameCount=0;
-$(“eventLog”).innerHTML=””;
-pushLog(“Dados limpos.”, “info”);
+  S.timeline=[]; S.events=[]; S.alertCount=0; S.drowsyFrameCount=0; S.distractFrameCount=0;
+  $("eventLog").innerHTML="";
+  pushLog("Dados limpos.", "info");
 }
-
+ 
 /* ─────────────────────────────────────
-XR EVENTS
+   XR EVENTS
 ───────────────────────────────────── */
-const scene = $(“scene”);
+const scene = $("scene");
 if(scene){
-scene.addEventListener(“loaded”,()=>{
-recenterXRPanel();
-pushLog(“Cena XR pronta.”,“info”);
-});
-scene.addEventListener(“enter-vr”,()=>{
-$(“xrScene”).classList.add(“xr-active”);
-setTimeout(recenterXRPanel,500);
-pushLog(“Sessão XR iniciada.”,“ok”);
-});
-scene.addEventListener(“exit-vr”,()=>{
-$(“xrScene”).classList.remove(“xr-active”);
-pushLog(“Sessão XR encerrada.”,“info”);
-});
+  scene.addEventListener("loaded",()=>{
+    recenterXRPanel();
+    pushLog("Cena XR pronta.","info");
+  });
+  scene.addEventListener("enter-vr",()=>{
+    $("xrScene").classList.add("xr-active");
+    setTimeout(recenterXRPanel,500);
+    pushLog("Sessão XR iniciada.","ok");
+  });
+  scene.addEventListener("exit-vr",()=>{
+    $("xrScene").classList.remove("xr-active");
+    pushLog("Sessão XR encerrada.","info");
+  });
 }
-
+ 
 /* ─────────────────────────────────────
-KEYBOARD SHORTCUTS
+   KEYBOARD SHORTCUTS
 ───────────────────────────────────── */
-window.addEventListener(“keydown”, e=>{
-const k=e.key.toLowerCase();
-if(k===“c”) toggleCamera();
-if(k===“m”) loadModels();
-if(k===“a”) toggleAnalysis();
-if(k===“p”) modal.classList.contains(“open”)?closeModal():openModal();
-if(k===“e”) exportJSON();
-if(k===“escape”){ closeModal(); dismissTicker(); }
-if(k===“r”) recenterXRPanel();
+window.addEventListener("keydown", e=>{
+  const k=e.key.toLowerCase();
+  if(k==="c") toggleCamera();
+  if(k==="m") loadModels();
+  if(k==="a") toggleAnalysis();
+  if(k==="p") modal.classList.contains("open")?closeModal():openModal();
+  if(k==="e") exportJSON();
+  if(k==="escape"){ closeModal(); dismissTicker(); }
+  if(k==="r") recenterXRPanel();
 });
-
-window.addEventListener(“resize”, resizeCanvas);
-
+ 
+window.addEventListener("resize", resizeCanvas);
+ 
 /* ─────────────────────────────────────
-BOOT
+   BOOT
 ───────────────────────────────────── */
 runBoot();
 </script>
-
 </body>
 </html>
