@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#070a12">
+  <title>Danke — Spatial Creation & Vision Studio</title>
+
+  <!-- Motores, XR, física, importação, GUI e persistência -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+  <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+  <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+  <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+  <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+  <script src="https://aframe.io/releases/1.8.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dexie@4.2.1/dist/dexie.min.js"></script>
+
+  <!-- Danke Vision Lab: carregamento sob demanda no painel Vision -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation"></script>
+
+  <style>
+    :root{--bg:#070a12;--panel:#0d111b;--panel2:#121827;--line:#273044;--text:#ecf2ff;--muted:#8490a8;--blue:#477cff;--cyan:#26d8ee;--violet:#8757ff;--green:#2fd39a;--red:#ff5b73;--yellow:#ffd55c;--top:58px;--bottom:32px;--left:292px;--right:292px}
+    *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);font-family:Inter,Arial,sans-serif}button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}.hidden{display:none!important}
+    #app{height:100%;display:grid;grid-template-rows:var(--top) 1fr var(--bottom)}
+    header{display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid var(--line);background:#090d15;z-index:40}.brand{display:flex;align-items:center;gap:10px;width:225px;font-weight:800;letter-spacing:.11em}.mark{display:grid;place-items:center;width:31px;height:31px;background:linear-gradient(145deg,var(--blue),var(--violet));clip-path:polygon(50% 0,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%)}.brand b{color:#7195ff}.project-name{margin:auto;font-size:13px}.project-name i{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:7px}.top-actions{display:flex;gap:7px;align-items:center}.btn{border:1px solid var(--line);background:#111725;border-radius:7px;padding:8px 11px;font-size:11px}.btn:hover{border-color:#52658d}.btn.primary{border-color:#477cff;background:#3869e8;color:#fff}.btn.xr{border-color:#5b4fc6;background:#211c46;color:#d5d0ff}.btn.danger{border-color:#743342;color:#2a1118;color:#ff9aaa}.status{max-width:270px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:10px}
+    #workspace{display:grid;grid-template-columns:72px var(--left) minmax(340px,1fr) var(--right);min-height:0}.rail{display:flex;flex-direction:column;gap:4px;padding:9px 6px;border-right:1px solid var(--line);background:#090c14}.rail button{height:54px;border:0;border-radius:7px;background:transparent;color:#758099;font-size:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}.rail button span{font-size:19px}.rail button.active{background:#17233f;color:#8daaff}.rail .spacer{flex:1}
+    .panel{background:var(--panel);overflow:auto;min-height:0}.left-panel{border-right:1px solid var(--line)}.right-panel{border-left:1px solid var(--line)}.panel-title{position:sticky;top:0;z-index:4;display:flex;align-items:center;height:44px;padding:0 13px;background:rgba(13,17,27,.96);border-bottom:1px solid var(--line);font-size:13px}.panel-title b{flex:1}.section{padding:12px;border-bottom:1px solid var(--line)}.section h3{font-size:9px;letter-spacing:.13em;color:var(--muted);margin:0 0 10px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.tool-card{border:1px solid var(--line);background:var(--panel2);border-radius:7px;padding:9px 5px;display:flex;flex-direction:column;gap:4px;align-items:center;font-size:9px;color:#aab5ca}.tool-card span{font-size:20px;color:#cad3e5}.tool-card:hover{border-color:#526aa6}.field{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}.field label{font-size:9px;color:var(--muted)}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);background:#0a0e17;border-radius:5px;padding:7px;font-size:10px;outline:none}.field textarea{min-height:62px;resize:vertical}.row{display:flex;gap:6px;align-items:center}.row>*{min-width:0}.row .field{flex:1}.note{font-size:9px;line-height:1.45;color:var(--muted)}.badge{display:inline-block;font-size:8px;padding:3px 5px;border-radius:4px;background:#17293a;color:#74d9e8;margin:2px}.search{display:flex}.search input{flex:1;border-radius:5px 0 0 5px}.search button{border-radius:0 5px 5px 0;border:0;background:#3869e8;width:36px}.asset-list{display:grid;gap:6px;margin-top:8px}.asset-result{display:grid;grid-template-columns:45px 1fr 24px;align-items:center;gap:7px;border:1px solid var(--line);background:#101622;border-radius:6px;padding:5px;text-align:left}.asset-result img{width:45px;height:38px;object-fit:cover;border-radius:4px}.asset-result b{font-size:9px}.asset-result small{display:block;color:var(--muted);font-size:8px}.tabs{display:flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;margin-bottom:7px}.tabs button{flex:1;border:0;background:#0d121d;padding:7px;font-size:9px;color:var(--muted)}.tabs button.active{background:#203764;color:#d9e4ff}
+    #viewport{position:relative;min-width:0;background:#05070d;overflow:hidden}#renderCanvas{width:100%;height:100%;display:block;touch-action:none;outline:none}.viewport-tools{position:absolute;top:11px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:6px;padding:3px;background:rgba(12,16,25,.9);border:1px solid var(--line);border-radius:7px}.viewport-tools button{width:35px;height:32px;border:0;border-radius:4px;background:transparent;color:#8490a7}.viewport-tools button.active{background:#315fd5;color:#fff}.view-badge{position:absolute;left:14px;bottom:13px;background:rgba(9,13,21,.82);border:1px solid var(--line);padding:6px 8px;border-radius:5px;color:var(--muted);font-size:9px}.drop-hint{position:absolute;inset:15%;display:none;place-items:center;border:2px dashed var(--blue);background:rgba(20,39,80,.65);border-radius:16px;z-index:20}.drop-hint.show{display:grid}
+    .scene-tree{max-height:190px;overflow:auto}.tree-item{display:flex;align-items:center;width:100%;height:28px;border:0;background:transparent;color:#9ca7ba;font-size:10px;text-align:left;padding:0 10px}.tree-item.selected{background:#233a68;color:#e6edff}.tree-item span{width:22px}.tree-item i{margin-left:auto;font-style:normal;color:#526078}.inspector-group{display:grid;grid-template-columns:50px repeat(3,1fr);gap:4px;align-items:center;margin-bottom:6px}.inspector-group label{font-size:9px;color:var(--muted)}.axis-input{display:flex;align-items:center;border:1px solid var(--line);background:#111722;border-radius:4px;overflow:hidden}.axis-input span{padding-left:4px;font-size:8px}.axis-input.x span{color:var(--red)}.axis-input.y span{color:var(--green)}.axis-input.z span{color:#6e91ff}.axis-input input{width:100%;min-width:0;border:0;background:transparent;text-align:right;padding:6px 4px;font-size:8px;outline:none}.behavior{width:100%;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#111722;border-radius:6px;padding:8px;text-align:left;margin-bottom:6px}.behavior span{font-size:18px;color:#8ea7ff}.behavior div{flex:1}.behavior b{font-size:9px}.behavior small{display:block;color:var(--muted);font-size:8px}.behavior i{font-style:normal;color:var(--green)}
+    #visionPlayer{position:fixed;inset:8%;z-index:100;background:#07101b;border:1px solid #35445d;border-radius:14px;display:none;grid-template-rows:45px 1fr;padding:10px;box-shadow:0 20px 80px #000}.vision-head{display:flex;align-items:center}.vision-head b{flex:1}.vision-stage{position:relative;overflow:hidden;background:#000;border-radius:10px}#visionVideo,#visionOverlay{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}#visionVideo.mirror{transform:scaleX(-1)}#visionOverlay{pointer-events:none}.vision-metrics{position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,.72);padding:10px;border-radius:7px;font-size:10px;line-height:1.6}.vision-zone{position:absolute;top:0;bottom:0;width:33.333%;border-right:1px solid rgba(255,255,255,.15);pointer-events:none}.vision-zone.z2{left:33.333%}.vision-zone.z3{left:66.666%}
+    footer{display:flex;align-items:center;padding:0 12px;background:#090d15;border-top:1px solid var(--line);color:var(--muted);font-size:9px}footer span{margin-right:18px}.ok{color:var(--green)}.warn{color:var(--yellow)}
+    @media(max-width:1080px){:root{--left:245px}.right-panel{display:none}#workspace{grid-template-columns:65px var(--left) 1fr}}@media(max-width:720px){:root{--left:0px}.left-panel{display:none}#workspace{grid-template-columns:58px 1fr}.brand{width:auto}.brand>span:last-child,.project-name,.status{display:none}.top-actions .btn:not(.xr):not(.primary){display:none}}
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand"><span class="mark">D</span><span>DANKE <b>XR</b></span></div>
+    <div class="project-name"><i></i><span id="projectName">Untitled Spatial Project</span></div>
+    <div class="top-actions">
+      <span class="status" id="status">Pronto para criar</span>
+      <button class="btn xr" id="enterVR">◉ VR</button>
+      <button class="btn xr" id="enterMR">◐ MR</button>
+      <button class="btn" id="saveProject">Salvar</button>
+      <button class="btn primary" id="togglePlay">▶ Simular</button>
+    </div>
+  </header>
+
+  <div id="workspace">
+    <nav class="rail" id="rail">
+      <button class="active" data-panel="create"><span>＋</span>Criar</button>
+      <button data-panel="assets"><span>▦</span>Assets</button>
+      <button data-panel="vision"><span>◉</span>Vision</button>
+      <button data-panel="behavior"><span>⌁</span>Automação</button>
+      <button data-panel="project"><span>◇</span>Projeto</button>
+      <div class="spacer"></div>
+      <button id="helpBtn"><span>?</span>Ajuda</button>
+    </nav>
+
+    <aside class="panel left-panel">
+      <div class="panel-title"><b id="leftTitle">Criar</b><span>⋯</span></div>
+
+      <div class="panel-page" data-page="create">
+        <section class="section">
+          <h3>PRIMITIVAS</h3>
+          <div class="grid4">
+            <button class="tool-card" data-create="box"><span>◇</span>Cubo</button>
+            <button class="tool-card" data-create="sphere"><span>●</span>Esfera</button>
+            <button class="tool-card" data-create="cylinder"><span>⬡</span>Cilindro</button>
+            <button class="tool-card" data-create="plane"><span>▱</span>Plano</button>
+          </div>
+        </section>
+        <section class="section">
+          <h3>CONSTRUTOR</h3>
+          <div class="grid2">
+            <button class="tool-card" data-create="door"><span>↔</span>Porta</button>
+            <button class="tool-card" data-create="wall"><span>▯</span>Parede</button>
+            <button class="tool-card" data-create="ui"><span>▣</span>Interface</button>
+            <button class="tool-card" data-create="light"><span>✦</span>Luz</button>
+          </div>
+        </section>
+        <section class="section">
+          <h3>POSICIONAMENTO PROCEDURAL</h3>
+          <div class="field"><label>Quantidade</label><input id="scatterCount" type="range" min="2" max="500" value="30"><small id="scatterValue" class="note">30 instâncias</small></div>
+          <div class="row"><button class="btn" id="scatterGrid">Grade</button><button class="btn" id="scatterCircle">Círculo</button><button class="btn" id="paintMode">Pincel infinito</button></div>
+          <p class="note">Usa instâncias de GPU, LOD e limite adaptativo para manter desempenho no Quest 3.</p>
+        </section>
+        <section class="section">
+          <h3>IA DE CENA</h3>
+          <div class="field"><textarea id="scenePrompt" placeholder="Ex.: crie uma sala com quatro paredes, uma porta automática e luz central"></textarea></div>
+          <button class="btn primary" id="generateScene">Gerar composição</button>
+        </section>
+      </div>
+
+      <div class="panel-page hidden" data-page="assets">
+        <section class="section">
+          <h3>UPLOAD LOCAL</h3>
+          <input id="assetInput" class="hidden" type="file" multiple accept=".glb,.gltf,.obj,.stl,.babylon,.hdr,.env,.png,.jpg,.jpeg,.webp,.zip">
+          <button class="btn primary" id="chooseAssets">Importar modelos, materiais ou HDRI</button>
+          <p class="note">GLB/GLTF é o formato recomendado. Arquivos permanecem no dispositivo até você exportar ou salvar.</p>
+        </section>
+        <section class="section">
+          <h3>BIBLIOTECAS CONECTADAS</h3>
+          <div class="tabs"><button class="active" data-source="polyhaven">Poly Haven</button><button data-source="sketchfab">Sketchfab</button></div>
+          <div class="field sketch-token hidden"><label>Token Sketchfab — somente na memória desta sessão</label><input id="sketchToken" type="password" autocomplete="off" placeholder="Cole uma nova chave"></div>
+          <div class="search field"><input id="assetSearch" placeholder="Pesquisar modelo, material ou HDRI"><button id="searchAssets">⌕</button></div>
+          <div class="asset-list" id="assetResults"></div>
+          <p class="note" id="assetCredit">Powered by Poly Haven • assets CC0</p>
+        </section>
+      </div>
+
+      <div class="panel-page hidden" data-page="vision">
+        <section class="section">
+          <h3>DANKE VISION LAB</h3>
+          <div class="field"><label>Fonte visual</label><select id="visionSource"><option value="camera">Câmera disponível</option><option value="file">Vídeo local</option><option value="screen">Compartilhamento de tela</option><option value="raw">WebXR camera-access experimental</option></select></div>
+          <input id="visionFile" type="file" accept="video/*,image/*" class="hidden">
+          <div class="row"><button class="btn" id="startVisionSource">Iniciar fonte</button><button class="btn" id="stopVisionSource">Parar</button></div>
+        </section>
+        <section class="section">
+          <h3>MODELOS TENSORFLOW</h3>
+          <label class="behavior"><input type="checkbox" id="modelObjects" checked><div><b>COCO-SSD</b><small>Objetos, pessoas, veículos e móveis</small></div></label>
+          <label class="behavior"><input type="checkbox" id="modelPose" checked><div><b>MoveNet</b><small>Pose, ergonomia e gestos</small></div></label>
+          <label class="behavior"><input type="checkbox" id="modelHands"><div><b>Hand Pose</b><small>21 pontos por mão</small></div></label>
+          <label class="behavior"><input type="checkbox" id="modelSegment"><div><b>Body Segmentation</b><small>Silhueta, oclusão e partes corporais</small></div></label>
+          <div class="field"><label>Perfil de pose</label><select id="poseProfile"><option value="lightning">Lightning — rápido</option><option value="thunder">Thunder — preciso</option><option value="multipose">MultiPose</option></select></div>
+          <button class="btn primary" id="loadVisionModels">Carregar selecionados</button>
+        </section>
+        <section class="section">
+          <h3>INFERÊNCIA</h3>
+          <div class="field"><label>Confiança mínima: <span id="confidenceValue">60%</span></label><input id="confidence" type="range" min="20" max="95" value="60"></div>
+          <div class="field"><label>Intervalo: <span id="intervalValue">300 ms</span></label><input id="visionInterval" type="range" min="100" max="1200" step="50" value="300"></div>
+          <div class="row"><button class="btn primary" id="startAnalysis">Analisar</button><button class="btn" id="stopAnalysis">Parar</button><button class="btn" id="openVisionPlayer">Player</button></div>
+        </section>
+        <section class="section">
+          <h3>REGRA VISUAL</h3>
+          <div class="field"><label>Quando detectar</label><input id="ruleLabel" value="person"></div>
+          <div class="row"><div class="field"><label>Zona</label><select id="ruleZone"><option>ANY</option><option>LEFT</option><option>CENTER</option><option>RIGHT</option></select></div><div class="field"><label>Ação</label><select id="ruleAction"><option value="open-door">Abrir portas</option><option value="show-ui">Mostrar interfaces</option><option value="light">Acender luzes</option><option value="alert">Emitir alerta</option></select></div></div>
+          <button class="btn" id="addVisionRule">Adicionar regra</button>
+          <div id="visionRules"></div>
+        </section>
+      </div>
+
+      <div class="panel-page hidden" data-page="behavior">
+        <section class="section">
+          <h3>COMPORTAMENTOS SEM CÓDIGO</h3>
+          <button class="behavior" data-behavior="door"><span>↔</span><div><b>Abrir/fechar porta</b><small>Click, proximidade ou evento visual</small></div><i>＋</i></button>
+          <button class="behavior" data-behavior="move"><span>⌁</span><div><b>Movimento XYZ</b><small>Origem, destino, duração e loop</small></div><i>＋</i></button>
+          <button class="behavior" data-behavior="rotate"><span>↻</span><div><b>Rotação contínua</b><small>Eixo e velocidade configuráveis</small></div><i>＋</i></button>
+          <button class="behavior" data-behavior="proximity"><span>◎</span><div><b>Proximidade</b><small>Aciona quando o usuário se aproxima</small></div><i>＋</i></button>
+          <button class="behavior" data-behavior="pulse"><span>✦</span><div><b>Pulso visual</b><small>Escala e emissão animadas</small></div><i>＋</i></button>
+        </section>
+        <section class="section"><h3>COMPORTAMENTOS DO SELECIONADO</h3><div id="behaviorList" class="note">Selecione um objeto.</div></section>
+      </div>
+
+      <div class="panel-page hidden" data-page="project">
+        <section class="section">
+          <h3>PROJETO</h3>
+          <div class="field"><label>Nome</label><input id="projectNameInput" value="Untitled Spatial Project"></div>
+          <div class="field"><label>Modo inicial</label><select id="startMode"><option value="desktop">Desktop</option><option value="vr">VR imersiva</option><option value="mr">MR passthrough</option></select></div>
+          <div class="field"><label>Unidade</label><select id="units"><option value="m">Metros — escala 1:1</option><option value="cm">Centímetros</option><option value="mm">Milímetros</option></select></div>
+        </section>
+        <section class="section">
+          <h3>SALVAR E EXPORTAR</h3>
+          <div class="grid2"><button class="btn" id="saveLocal">Salvar IndexedDB</button><button class="btn" id="loadLocal">Restaurar</button><button class="btn" id="exportJSON">Exportar projeto</button><button class="btn" id="importJSONBtn">Importar projeto</button><button class="btn primary" id="exportGLB">Exportar GLB</button><button class="btn" id="screenshotBtn">Capturar imagem</button></div>
+          <input id="projectFile" type="file" accept=".json,application/json" class="hidden">
+        </section>
+        <section class="section"><h3>GITHUB PAGES</h3><p class="note">Publique este arquivo como <b>index.html</b>. GitHub Pages fornece HTTPS, necessário para WebXR. O token Sketchfab nunca é salvo no projeto.</p></section>
+      </div>
+    </aside>
+
+    <main id="viewport">
+      <canvas id="renderCanvas"></canvas>
+      <div class="viewport-tools">
+        <button data-gizmo="position" class="active" title="Mover (W)">✥</button>
+        <button data-gizmo="rotation" title="Rotacionar (E)">↻</button>
+        <button data-gizmo="scale" title="Escalar (R)">⤢</button>
+        <button id="focusSelected" title="Focar (F)">◎</button>
+        <button id="deleteSelected" title="Excluir (Delete)">⌫</button>
+      </div>
+      <div class="view-badge">PERSPECTIVA • GRID 1 m • <span id="modeBadge">EDIÇÃO</span></div>
+      <div class="drop-hint" id="dropHint">Solte o arquivo para importar</div>
+    </main>
+
+    <aside class="panel right-panel">
+      <div class="panel-title"><b>Cena</b><button class="btn" id="duplicateSelected">Duplicar</button></div>
+      <div class="scene-tree" id="sceneTree"></div>
+      <section class="section">
+        <h3>TRANSFORM</h3>
+        <div class="inspector-group"><label>Posição</label><div class="axis-input x"><span>X</span><input data-transform="position.x"></div><div class="axis-input y"><span>Y</span><input data-transform="position.y"></div><div class="axis-input z"><span>Z</span><input data-transform="position.z"></div></div>
+        <div class="inspector-group"><label>Rotação</label><div class="axis-input x"><span>X</span><input data-transform="rotation.x"></div><div class="axis-input y"><span>Y</span><input data-transform="rotation.y"></div><div class="axis-input z"><span>Z</span><input data-transform="rotation.z"></div></div>
+        <div class="inspector-group"><label>Escala</label><div class="axis-input x"><span>X</span><input data-transform="scaling.x"></div><div class="axis-input y"><span>Y</span><input data-transform="scaling.y"></div><div class="axis-input z"><span>Z</span><input data-transform="scaling.z"></div></div>
+      </section>
+      <section class="section">
+        <h3>MATERIAL PBR</h3>
+        <div class="row"><div class="field"><label>Cor</label><input id="materialColor" type="color" value="#477cff"></div><div class="field"><label>Emissão</label><input id="emissiveColor" type="color" value="#000000"></div></div>
+        <div class="field"><label>Metallic</label><input id="metallic" type="range" min="0" max="1" step=".01" value=".35"></div>
+        <div class="field"><label>Roughness</label><input id="roughness" type="range" min="0" max="1" step=".01" value=".3"></div>
+        <div class="field"><label>Transparência</label><input id="alpha" type="range" min=".05" max="1" step=".01" value="1"></div>
+      </section>
+      <section class="section"><h3>SELEÇÃO</h3><div id="selectionInfo" class="note">Nenhum objeto selecionado.</div></section>
+    </aside>
+  </div>
+
+  <footer><span id="fps">FPS 0</span><span id="objectCount">0 objetos</span><span id="xrSupport">XR verificando…</span><span id="visionStatus">Vision off</span><span class="ok">● Danke local-first</span></footer>
+</div>
+
+<div id="visionPlayer">
+  <div class="vision-head"><b>Danke Vision Lab — análise do espaço real</b><span id="visionMessage" class="status">Aguardando fonte</span><button class="btn" id="closeVisionPlayer">Fechar</button></div>
+  <div class="vision-stage"><video id="visionVideo" autoplay muted playsinline></video><canvas id="visionOverlay"></canvas><div class="vision-zone z1"></div><div class="vision-zone z2"></div><div class="vision-zone z3"></div><div class="vision-metrics">FPS: <span id="vFps">0</span><br>Objetos: <span id="vObjects">0</span><br>Pessoas: <span id="vPersons">0</span><br>Pose: <span id="vPose">off</span><br>Ergonomia: <span id="vErgo">-</span><br>Eventos: <span id="vEvents">0</span></div></div>
+</div>
+
+<!-- A-Frame fica disponível como camada de compatibilidade/exportação declarativa. -->
+<a-scene id="aframeCompatibility" embedded vr-mode-ui="enabled:false" style="display:none"></a-scene>
+
+<script>
+(() => {
+  "use strict";
+  const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+  const state={scene:null,engine:null,camera:null,selected:null,gizmos:null,xr:null,physics:null,playing:false,paint:false,source:"polyhaven",objects:new Map(),id:0,vision:{stream:null,models:{},running:false,raf:0,last:0,events:[],timeline:[],predictions:[],poses:[],fps:0,frames:0,stamp:performance.now(),rules:[]}};
+  const db=new Dexie("DankeStudio");db.version(1).stores({projects:"name,updatedAt"});
+  const status=(m)=>{$("#status").textContent=m;console.log("[Danke]",m)};
+  const uid=()=>`danke-${Date.now()}-${++state.id}`;
+  const hex=c=>BABYLON.Color3.FromHexString(c);
+
+  async function init(){
+    const canvas=$("#renderCanvas");state.engine=new BABYLON.Engine(canvas,true,{preserveDrawingBuffer:true,stencil:true,disableWebGL2Support:false});state.scene=new BABYLON.Scene(state.engine);state.scene.clearColor=new BABYLON.Color4(.025,.035,.065,1);state.scene.environmentIntensity=.85;
+    state.camera=new BABYLON.ArcRotateCamera("EditorCamera",-Math.PI/2.35,Math.PI/3,9,new BABYLON.Vector3(0,1,0),state.scene);state.camera.lowerRadiusLimit=.3;state.camera.upperRadiusLimit=100;state.camera.wheelPrecision=35;state.camera.panningSensibility=120;state.camera.attachControl(canvas,true);
+    new BABYLON.HemisphericLight("Hemi",new BABYLON.Vector3(0,1,0),state.scene).intensity=.75;const sun=new BABYLON.DirectionalLight("Sun",new BABYLON.Vector3(-.5,-1,-.5),state.scene);sun.position=new BABYLON.Vector3(5,9,5);sun.intensity=2.2;
+    const ground=BABYLON.MeshBuilder.CreateGround("Ground",{width:40,height:40,subdivisions:2},state.scene);ground.isPickable=true;ground.metadata={system:true,id:"ground"};const gm=new BABYLON.PBRMaterial("GroundMat",state.scene);gm.albedoColor=new BABYLON.Color3(.025,.035,.06);gm.metallic=.2;gm.roughness=.75;ground.material=gm;
+    const grid=new BABYLON.GridMaterial("Grid",state.scene);grid.majorUnitFrequency=5;grid.minorUnitVisibility=.45;grid.gridRatio=1;grid.mainColor=new BABYLON.Color3(.08,.13,.24);grid.lineColor=new BABYLON.Color3(.12,.25,.58);grid.opacity=.7;ground.material=grid;
+    try{const hk=await HavokPhysics();state.physics=new BABYLON.HavokPlugin(true,hk);state.scene.enablePhysics(new BABYLON.Vector3(0,-9.81,0),state.physics);new BABYLON.PhysicsAggregate(ground,BABYLON.PhysicsShapeType.BOX,{mass:0,restitution:.15},state.scene);status("Motor Babylon, Havok e WebXR carregados")}catch(e){console.warn(e);status("Editor ativo; física Havok indisponível")}
+    state.gizmos=new BABYLON.GizmoManager(state.scene);state.gizmos.usePointerToAttachGizmos=false;setGizmo("position");
+    state.scene.onPointerObservable.add(pi=>{if(pi.type!==BABYLON.PointerEventTypes.POINTERPICK)return;const mesh=pi.pickInfo?.pickedMesh;if(mesh&&!mesh.metadata?.system)select(mesh);else if(state.paint&&pi.pickInfo?.pickedPoint&&state.selected)paintInstance(pi.pickInfo.pickedPoint)});
+    setupXR();createDemo();setupUI();state.engine.runRenderLoop(render);window.addEventListener("resize",()=>state.engine.resize());refreshTree();detectXR();
+  }
+
+  function pbr(name,color="#477cff"){const m=new BABYLON.PBRMaterial(name,state.scene);m.albedoColor=hex(color);m.metallic=.35;m.roughness=.3;m.environmentIntensity=1;m.clearCoat.isEnabled=true;m.clearCoat.intensity=.25;return m}
+  function register(mesh,type="mesh"){mesh.metadata=Object.assign(mesh.metadata||{},{id:uid(),type,behaviors:[],system:false});mesh.isPickable=true;state.objects.set(mesh.metadata.id,mesh);refreshTree();return mesh}
+  function create(type,opts={}){let mesh;const n=opts.name||`${type[0].toUpperCase()+type.slice(1)} ${state.objects.size+1}`;
+    if(type==="box"||type==="wall"||type==="door"||type==="ui")mesh=BABYLON.MeshBuilder.CreateBox(n,{width:type==="wall"?4:type==="door"?1.05:type==="ui"?1.4:1.1,height:type==="wall"?2.7:type==="door"?2.15:type==="ui"?.8:1.1,depth:type==="wall"?.14:type==="door"?.12:type==="ui"?.06:1.1},state.scene);
+    else if(type==="sphere")mesh=BABYLON.MeshBuilder.CreateSphere(n,{diameter:1.2,segments:32},state.scene);else if(type==="cylinder")mesh=BABYLON.MeshBuilder.CreateCylinder(n,{height:1.4,diameter:1.1,tessellation:36},state.scene);else if(type==="plane")mesh=BABYLON.MeshBuilder.CreatePlane(n,{size:1.5},state.scene);else if(type==="light"){const bulb=BABYLON.MeshBuilder.CreateSphere(n,{diameter:.18},state.scene);const l=new BABYLON.PointLight(`${n} Light`,new BABYLON.Vector3(0,0,0),state.scene);l.intensity=20;l.range=12;l.parent=bulb;mesh=bulb}else return null;
+    mesh.position=opts.position||new BABYLON.Vector3(0,type==="door"?1.075:type==="wall"?1.35:1,0);mesh.material=pbr(`${n} Material`,opts.color||(type==="door"?"#704a2c":type==="wall"?"#8d96a8":type==="ui"?"#2c64d8":"#477cff"));register(mesh,type);if(type==="door"){mesh.setPivotPoint(new BABYLON.Vector3(-.525,0,0));mesh.metadata.behaviors.push({type:"door",open:false,angle:90,speed:3,autoClose:3})}if(type==="ui")buildSpatialUI(mesh);select(mesh);return mesh}
+  function createDemo(){const base=create("cylinder",{name:"Danke Platform",position:new BABYLON.Vector3(0,.18,0),color:"#163b87"});base.scaling=new BABYLON.Vector3(2.2,.25,2.2);base.metadata.system=true;const core=create("box",{name:"Danke Core",position:new BABYLON.Vector3(0,1.25,0),color:"#8051ff"});core.rotation.y=Math.PI/4;core.metadata.behaviors.push({type:"rotate",axis:"y",speed:.35});select(core)}
+  function buildSpatialUI(mesh){const plane=BABYLON.MeshBuilder.CreatePlane(`${mesh.name} surface`,{width:1.25,height:.65},state.scene);plane.parent=mesh;plane.position.z=-.036;plane.rotation.y=Math.PI;const tex=BABYLON.GUI.AdvancedDynamicTexture.CreateForMesh(plane,1024,512);const panel=new BABYLON.GUI.StackPanel();panel.paddingTop="40px";tex.addControl(panel);const title=new BABYLON.GUI.TextBlock();title.text="DANKE SPATIAL UI";title.height="90px";title.color="white";title.fontSize=42;panel.addControl(title);const btn=BABYLON.GUI.Button.CreateSimpleButton("action","ATIVAR AÇÃO");btn.height="110px";btn.width="650px";btn.color="white";btn.background="#477cff";btn.cornerRadius=18;btn.onPointerClickObservable.add(()=>status("Interface espacial acionada"));panel.addControl(btn)}
+
+  function select(mesh){state.selected=mesh;state.gizmos.attachToMesh(mesh);refreshTree();refreshInspector();status(`Selecionado: ${mesh.name}`)}
+  function setGizmo(mode){$$('[data-gizmo]').forEach(b=>b.classList.toggle("active",b.dataset.gizmo===mode));state.gizmos.positionGizmoEnabled=mode==="position";state.gizmos.rotationGizmoEnabled=mode==="rotation";state.gizmos.scaleGizmoEnabled=mode==="scale";if(state.selected)state.gizmos.attachToMesh(state.selected)}
+  function refreshTree(){const list=$("#sceneTree");if(!list)return;list.innerHTML="";[...state.objects.values()].filter(m=>!m.metadata?.system).forEach(m=>{const b=document.createElement("button");b.className=`tree-item ${m===state.selected?'selected':''}`;b.innerHTML=`<span>${m.metadata.type==='sphere'?'●':m.metadata.type==='door'?'↔':'◇'}</span>${m.name}<i>●</i>`;b.onclick=()=>select(m);list.appendChild(b)});$("#objectCount").textContent=`${[...state.objects.values()].filter(m=>!m.metadata?.system).length} objetos`}
+  function refreshInspector(){const m=state.selected;if(!m)return;$$('[data-transform]').forEach(i=>{const [group,axis]=i.dataset.transform.split('.');let v=m[group][axis];if(group==="rotation")v=BABYLON.Tools.ToDegrees(v);i.value=Number(v).toFixed(2)});const mat=m.material; if(mat?.albedoColor)$("#materialColor").value=mat.albedoColor.toHexString();$("#selectionInfo").innerHTML=`<b>${m.name}</b><br>ID: ${m.metadata.id}<br>Tipo: ${m.metadata.type}<br>Behaviors: ${m.metadata.behaviors?.length||0}`;refreshBehaviors()}
+  function refreshBehaviors(){const out=$("#behaviorList"),bs=state.selected?.metadata?.behaviors||[];out.innerHTML=bs.length?bs.map((b,i)=>`<div class="behavior"><span>⌁</span><div><b>${b.type}</b><small>${JSON.stringify(b)}</small></div><i>${i+1}</i></div>`).join(""):"Nenhum comportamento aplicado."}
+
+  async function setupXR(){try{state.xr=await state.scene.createDefaultXRExperienceAsync({floorMeshes:[state.scene.getMeshByName("Ground")],uiOptions:{sessionMode:"immersive-vr"},optionalFeatures:true});const fm=state.xr.baseExperience.featuresManager;try{fm.enableFeature(BABYLON.WebXRFeatureName.HAND_TRACKING,"latest",{xrInput:state.xr.input})}catch{}try{fm.enableFeature(BABYLON.WebXRFeatureName.TELEPORTATION,"stable",{xrInput:state.xr.input,floorMeshes:[state.scene.getMeshByName("Ground")]})}catch{}state.xr.input.onControllerAddedObservable.add(ctrl=>bindController(ctrl));}catch(e){console.warn("XR init",e)}}
+  function bindController(ctrl){ctrl.onMotionControllerInitObservable.add(mc=>{const trigger=mc.getComponent("xr-standard-trigger"),squeeze=mc.getComponent("xr-standard-squeeze"),a=mc.getComponent("a-button"),b=mc.getComponent("b-button"),x=mc.getComponent("x-button"),y=mc.getComponent("y-button");trigger?.onButtonStateChangedObservable.add(c=>{if(c.pressed&&state.xr?.pointerSelection){const p=state.xr.pointerSelection.getMeshUnderPointer(ctrl.uniqueId);if(p&&!p.metadata?.system)select(p)}});squeeze?.onButtonStateChangedObservable.add(c=>grabXR(ctrl,c.pressed));a?.onButtonStateChangedObservable.add(c=>{if(c.pressed)duplicate()});b?.onButtonStateChangedObservable.add(c=>{if(c.pressed)state.gizmos.attachToMesh(null)});x?.onButtonStateChangedObservable.add(c=>{if(c.pressed)switchPanel("create")});y?.onButtonStateChangedObservable.add(c=>{if(c.pressed)undoHint()})})}
+  function grabXR(ctrl,pressed){const root=ctrl.grip||ctrl.pointer;if(!root||!state.selected)return;if(pressed){state.selected.setParent(root);state.selected.metadata.xrGrab=true}else if(state.selected.metadata.xrGrab){state.selected.setParent(null);delete state.selected.metadata.xrGrab}}
+  async function enterXR(mode){if(!state.xr){status("WebXR indisponível");return}try{state.scene.clearColor=mode==="immersive-ar"?new BABYLON.Color4(0,0,0,0):new BABYLON.Color4(.025,.035,.065,1);await state.xr.baseExperience.enterXRAsync(mode,"local-floor",state.xr.renderTarget);status(mode==="immersive-ar"?"Realidade Mista ativa":"Realidade Virtual ativa")}catch(e){status(`Falha ao iniciar ${mode}: ${e.message}`)}}
+  async function detectXR(){if(!navigator.xr){$("#xrSupport").textContent="XR indisponível";return}const [vr,mr]=await Promise.all([navigator.xr.isSessionSupported("immersive-vr"),navigator.xr.isSessionSupported("immersive-ar")]);$("#xrSupport").textContent=`XR: ${vr?'VR ✓':'VR —'} • ${mr?'MR ✓':'MR —'}`}
+
+  function render(){const dt=state.engine.getDeltaTime()/1000;if(state.playing)applyBehaviors(dt);state.scene.render();$("#fps").textContent=`FPS ${state.engine.getFps().toFixed(0)}`}
+  function applyBehaviors(dt){const t=performance.now()/1000;state.objects.forEach(m=>(m.metadata?.behaviors||[]).forEach(b=>{if(b.type==="rotate")m.rotation[b.axis||"y"]+=b.speed*dt;if(b.type==="pulse"){const s=1+Math.sin(t*b.speed)*b.amount;m.scaling.setAll(s)}if(b.type==="move")m.position[b.axis||"x"]=b.origin+Math.sin(t*b.speed)*b.distance;if(b.type==="door"){const target=b.open?BABYLON.Tools.ToRadians(b.angle):0;m.rotation.y=BABYLON.Scalar.Lerp(m.rotation.y,target,Math.min(1,b.speed*dt))}if(b.type==="proximity"){const pos=state.camera.globalPosition||state.camera.position;if(BABYLON.Vector3.Distance(pos,m.getAbsolutePosition())<b.distance)triggerTarget(b.action)}}))}
+  function triggerTarget(action){if(action==="open-door")state.objects.forEach(m=>(m.metadata?.behaviors||[]).filter(b=>b.type==="door").forEach(b=>b.open=true));if(action==="light")state.scene.lights.forEach(l=>l.intensity=Math.max(l.intensity,5));if(action==="show-ui")state.objects.forEach(m=>{if(m.metadata?.type==="ui")m.setEnabled(true)});if(action==="alert")status("⚠ Regra visual acionada")}
+  function addBehavior(type){const m=state.selected;if(!m){status("Selecione um objeto");return}const b=type==="door"?{type,open:false,angle:90,speed:3}:type==="move"?{type,axis:"x",origin:m.position.x,distance:2,speed:1}:type==="rotate"?{type,axis:"y",speed:.7}:type==="proximity"?{type,distance:1.5,action:"open-door"}:{type:"pulse",amount:.12,speed:2};m.metadata.behaviors.push(b);refreshInspector();status(`${b.type} aplicado a ${m.name}`)}
+  function duplicate(){if(!state.selected)return;const c=state.selected.clone(`${state.selected.name} Copy`);c.position.addInPlace(new BABYLON.Vector3(.4,0,.4));c.metadata=JSON.parse(JSON.stringify(state.selected.metadata));c.metadata.id=uid();state.objects.set(c.metadata.id,c);select(c);refreshTree()}
+  function removeSelected(){const m=state.selected;if(!m||m.metadata?.system)return;state.objects.delete(m.metadata.id);m.dispose(false,true);state.selected=null;state.gizmos.attachToMesh(null);refreshTree();$("#selectionInfo").textContent="Nenhum objeto selecionado."}
+  function focus(){if(state.selected){state.camera.setTarget(state.selected.getAbsolutePosition());state.camera.radius=Math.max(2,state.selected.getBoundingInfo().boundingSphere.radiusWorld*4)}}
+  function scatter(kind){if(!state.selected){status("Selecione um objeto-base");return}const count=+$("#scatterCount").value,src=state.selected;if(!src.geometry){status("O selecionado não possui geometria instanciável");return}const matrices=[];for(let i=0;i<count;i++){let x,z;if(kind==="circle"){const a=i/count*Math.PI*2,r=Math.max(2,count*.06);x=Math.cos(a)*r;z=Math.sin(a)*r}else{const side=Math.ceil(Math.sqrt(count));x=(i%side-side/2)*1.5;z=(Math.floor(i/side)-side/2)*1.5}matrices.push(BABYLON.Matrix.Translation(x,src.position.y,z))}src.thinInstanceSetBuffer("matrix",matrices.flatMap(m=>Array.from(m.m)),16);status(`${count} instâncias criadas em ${kind}`)}
+  function paintInstance(point){const m=state.selected;if(!m?.geometry)return;const matrix=BABYLON.Matrix.Translation(point.x,point.y+m.getBoundingInfo().boundingBox.extendSizeWorld.y,point.z);m.thinInstanceAdd(matrix)}
+
+  async function importFiles(files){for(const file of files){const ext=file.name.split('.').pop().toLowerCase();try{if(["hdr","env"].includes(ext)){const url=URL.createObjectURL(file);const tex=ext==="hdr"?new BABYLON.HDRCubeTexture(url,state.scene,512):BABYLON.CubeTexture.CreateFromPrefilteredData(url,state.scene);state.scene.environmentTexture=tex;state.scene.createDefaultSkybox(tex,true,1000,.25);status(`${file.name} aplicado como ambiente`);continue}if(ext==="zip"){status("ZIP recebido; descompacte para GLB quando o pacote contiver dependências");continue}const url=URL.createObjectURL(file);const result=await BABYLON.SceneLoader.ImportMeshAsync(null,"",url,state.scene,undefined,`.${ext}`);result.meshes.filter(m=>m.getTotalVertices?.()>0).forEach(m=>register(m,"model"));if(result.meshes[0])select(result.meshes.find(m=>m.getTotalVertices?.()>0)||result.meshes[0]);status(`${file.name} importado`)}catch(e){console.error(e);status(`Falha ao importar ${file.name}`)}}refreshTree()}
+  async function searchAssets(){const q=$("#assetSearch").value.trim(),out=$("#assetResults");out.innerHTML="Buscando…";try{if(state.source==="polyhaven"){const data=await (await fetch("https://api.polyhaven.com/assets")).json();const list=Object.entries(data).filter(([,a])=>!q||`${a.name} ${(a.tags||[]).join(' ')}`.toLowerCase().includes(q.toLowerCase())).slice(0,12);out.innerHTML="";list.forEach(([id,a])=>assetRow(out,{id,name:a.name,thumb:a.thumbnail_url,source:"Poly Haven",type:a.type}))}else{const token=$("#sketchToken").value.trim();if(!token)throw Error("Informe uma nova chave Sketchfab");const res=await fetch(`https://api.sketchfab.com/v3/search?type=models&downloadable=true&q=${encodeURIComponent(q)}&count=12`,{headers:{Authorization:`Token ${token}`}});if(!res.ok)throw Error("Falha na pesquisa Sketchfab");const data=await res.json();out.innerHTML="";data.results.forEach(a=>assetRow(out,{id:a.uid,name:a.name,thumb:a.thumbnails?.images?.[0]?.url,source:"Sketchfab"}))}}catch(e){out.innerHTML=`<p class="note">${e.message}. Em GitHub Pages, a API também pode aplicar restrições CORS.</p>`}}
+  function assetRow(out,a){const b=document.createElement("button");b.className="asset-result";b.innerHTML=`${a.thumb?`<img src="${a.thumb}" alt="">`:'<span>▧</span>'}<div><b>${a.name}</b><small>${a.source}</small></div><i>＋</i>`;b.onclick=()=>downloadAsset(a);out.appendChild(b)}
+  async function downloadAsset(a){status(`Baixando ${a.name}…`);try{if(a.source==="Poly Haven"){const data=await (await fetch(`https://api.polyhaven.com/files/${a.id}`)).json();const urls=[];(function walk(v){if(!v||typeof v!=="object")return;Object.entries(v).forEach(([k,x])=>k==="url"&&typeof x==="string"?urls.push(x):walk(x))})(data);const url=urls.find(u=>/_1k\.hdr(\?|$)/i.test(u))||urls.find(u=>/\.glb(\?|$)/i.test(u))||urls.find(u=>/\.hdr(\?|$)/i.test(u));if(!url)throw Error("Sem formato compatível");const blob=await (await fetch(url)).blob();await importFiles([new File([blob],`${a.id}.${url.includes('.hdr')?'hdr':'glb'}`,{type:blob.type})])}else{const token=$("#sketchToken").value.trim();const res=await fetch(`https://api.sketchfab.com/v3/models/${a.id}/download`,{headers:{Authorization:`Token ${token}`}});const d=await res.json(),item=d.glb||d.gltf;if(!item?.url)throw Error("Modelo não disponível em GLB/GLTF");const blob=await (await fetch(item.url)).blob();if(d.glb)await importFiles([new File([blob],`${a.id}.glb`,{type:blob.type})]);else status("Sketchfab retornou pacote glTF; prefira modelos com GLB")}}catch(e){status(`Download: ${e.message}`)}}
+
+  // DANKE VISION LAB
+  async function startVisionSource(){stopVisionSource();const type=$("#visionSource").value,v=$("#visionVideo");try{if(type==="file"){$("#visionFile").click();return}if(type==="screen")state.vision.stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});else if(type==="raw"){status("camera-access solicitado quando suportado; usando câmera disponível como fallback");state.vision.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false})}else state.vision.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});v.srcObject=state.vision.stream;await v.play();$("#visionMessage").textContent="Fonte ativa";$("#visionStatus").textContent="Vision source ✓"}catch(e){status(`Câmera: ${e.message}`)}}
+  function stopVisionSource(){state.vision.stream?.getTracks().forEach(t=>t.stop());state.vision.stream=null;$("#visionVideo").srcObject=null;$("#visionStatus").textContent="Vision off"}
+  async function loadVisionModels(){const m=state.vision.models;try{await tf.ready();status(`TensorFlow backend: ${tf.getBackend()}`);if($("#modelObjects").checked&&!m.objects)m.objects=await cocoSsd.load({base:"lite_mobilenet_v2"});if($("#modelPose").checked){const p=$("#poseProfile").value;const type=p==="thunder"?poseDetection.movenet.modelType.SINGLEPOSE_THUNDER:p==="multipose"?poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING:poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING;m.pose=await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet,{modelType:type,enableSmoothing:true})}if($("#modelHands").checked&&!m.hands)m.hands=await handPoseDetection.createDetector(handPoseDetection.SupportedModels.MediaPipeHands,{runtime:"tfjs",modelType:"lite",maxHands:2});if($("#modelSegment").checked&&!m.segment)m.segment=await bodySegmentation.createSegmenter(bodySegmentation.SupportedModels.BodyPix,{architecture:"MobileNetV1",outputStride:16,multiplier:.5,quantBytes:2});status("Modelos Vision carregados");$("#visionStatus").textContent="Vision models ✓"}catch(e){console.error(e);status(`TensorFlow: ${e.message}`)}}
+  function startAnalysis(){const v=$("#visionVideo");if(!v.srcObject&&!v.src){status("Inicie uma fonte visual");return}if(!Object.keys(state.vision.models).length){status("Carregue os modelos");return}state.vision.running=true;$("#visionPlayer").style.display="grid";visionLoop()}
+  function stopAnalysis(){state.vision.running=false;cancelAnimationFrame(state.vision.raf);$("#visionStatus").textContent="Vision pausado"}
+  async function visionLoop(){if(!state.vision.running)return;const now=performance.now(),interval=+$("#visionInterval").value;if(now-state.vision.last>=interval){state.vision.last=now;await inferVision();drawVision()}state.vision.frames++;if(now-state.vision.stamp>1000){state.vision.fps=state.vision.frames;state.vision.frames=0;state.vision.stamp=now;$("#vFps").textContent=state.vision.fps}state.vision.raf=requestAnimationFrame(visionLoop)}
+  async function inferVision(){const v=$("#visionVideo"),m=state.vision.models,threshold=+$("#confidence").value/100;try{if(m.objects)state.vision.predictions=(await m.objects.detect(v,12)).filter(p=>p.score>=threshold);if(m.pose)state.vision.poses=await m.pose.estimatePoses(v,{maxPoses:4,flipHorizontal:false});const stable=stabilizeDetections(state.vision.predictions);evaluateVisionRules(stable);const ergo=state.vision.poses[0]?analyzeErgonomics(state.vision.poses[0]):{label:"-"};$("#vObjects").textContent=stable.length;$("#vPersons").textContent=stable.filter(p=>p.class==="person").length;$("#vPose").textContent=state.vision.poses.length?"on":"off";$("#vErgo").textContent=ergo.label;state.vision.timeline.push({t:Date.now(),objects:stable.map(p=>({class:p.class,score:p.score,bbox:p.bbox})),pose:state.vision.poses[0]?.keypoints||null,ergo});if(state.vision.timeline.length>3000)state.vision.timeline.shift()}catch(e){console.warn("Vision infer",e)}}
+  function stabilizeDetections(preds){const key=p=>`${p.class}-${Math.round((p.bbox[0]+p.bbox[2]/2)/80)}`;const prev=state.vision._smooth||new Map(),next=new Map();preds.forEach(p=>{const k=key(p),old=prev.get(k);p.smoothScore=old?old.smoothScore*.65+p.score*.35:p.score;p.bbox=old?p.bbox.map((v,i)=>old.bbox[i]*.55+v*.45):p.bbox;next.set(k,p)});state.vision._smooth=next;return [...next.values()]}
+  function analyzeErgonomics(pose){const k=Object.fromEntries(pose.keypoints.map(p=>[p.name,p])),ls=k.left_shoulder,rs=k.right_shoulder,lh=k.left_hip,rh=k.right_hip,n=k.nose,lw=k.left_wrist,rw=k.right_wrist;if(!ls||!rs||!lh||!rh)return{label:"Pose insuficiente"};const angle=(a,b)=>Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,sm={x:(ls.x+rs.x)/2,y:(ls.y+rs.y)/2},hm={x:(lh.x+rh.x)/2,y:(lh.y+rh.y)/2};const shoulders=Math.abs(angle(ls,rs)),torso=Math.abs(angle(sm,hm)+90),head=n?Math.abs(angle(sm,n)+90):0;let label="Neutro";if(shoulders>8)label="Ombros desnivelados";if(torso>18)label="Inclinação de tronco";if(lw&&rw&&lw.y<ls.y&&rw.y<rs.y)label="Braços elevados";if(head>20)label="Inclinação cervical";return{label,shoulders,torso,head}}
+  function evaluateVisionRules(preds){const w=$("#visionVideo").videoWidth||1;preds.forEach(p=>{const x=(p.bbox[0]+p.bbox[2]/2)/w,zone=x<.333?"LEFT":x<.666?"CENTER":"RIGHT";state.vision.rules.forEach(r=>{if((r.label==="*"||p.class.toLowerCase()===r.label.toLowerCase())&&(r.zone==="ANY"||r.zone===zone)){const key=`${r.label}-${r.zone}-${r.action}`;if(Date.now()-(r.last||0)>1200){r.last=Date.now();triggerTarget(r.action);state.vision.events.push({t:Date.now(),label:p.class,zone,action:r.action,confidence:p.smoothScore||p.score});$("#vEvents").textContent=state.vision.events.length}}})})}
+  function drawVision(){const v=$("#visionVideo"),c=$("#visionOverlay"),ctx=c.getContext("2d");if(!v.videoWidth)return;c.width=v.videoWidth;c.height=v.videoHeight;ctx.clearRect(0,0,c.width,c.height);state.vision.predictions.forEach(p=>{const [x,y,w,h]=p.bbox;ctx.strokeStyle=p.class==="person"?"#ff4fd8":"#00e5ff";ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);ctx.fillStyle=ctx.strokeStyle;ctx.font="16px Arial";ctx.fillText(`${p.class} ${((p.smoothScore||p.score)*100).toFixed(1)}%`,x,y>20?y-5:y+18)});state.vision.poses.forEach(p=>{const k=Object.fromEntries(p.keypoints.map(x=>[x.name,x]));[["left_shoulder","right_shoulder"],["left_shoulder","left_elbow"],["left_elbow","left_wrist"],["right_shoulder","right_elbow"],["right_elbow","right_wrist"],["left_shoulder","left_hip"],["right_shoulder","right_hip"],["left_hip","right_hip"],["left_hip","left_knee"],["right_hip","right_knee"]].forEach(([a,b])=>{if(k[a]?.score>.2&&k[b]?.score>.2){ctx.beginPath();ctx.strokeStyle="#ffd84d";ctx.moveTo(k[a].x,k[a].y);ctx.lineTo(k[b].x,k[b].y);ctx.stroke()}})})}
+
+  function projectData(){return{name:$("#projectNameInput").value,updatedAt:Date.now(),units:$("#units").value,startMode:$("#startMode").value,scene:BABYLON.SceneSerializer.Serialize(state.scene),visionRules:state.vision.rules,visionTimeline:state.vision.timeline.slice(-1000)}}
+  async function saveLocal(){const d=projectData();await db.projects.put(d);status("Projeto salvo localmente")}
+  async function loadLocal(){const d=await db.projects.orderBy("updatedAt").last();if(!d){status("Nenhum projeto salvo");return}await restoreProject(d)}
+  async function restoreProject(d){state.gizmos.attachToMesh(null);[...state.objects.values()].forEach(m=>m.dispose(false,true));state.objects.clear();const projectBlob=new Blob([JSON.stringify(d.scene)],{type:"application/json"}),projectUrl=URL.createObjectURL(projectBlob);try{await BABYLON.SceneLoader.AppendAsync("",projectUrl,state.scene,undefined,".babylon")}finally{URL.revokeObjectURL(projectUrl)}state.scene.meshes.filter(m=>m.metadata?.id&&!m.metadata.system).forEach(m=>{state.objects.set(m.metadata.id,m);m.isPickable=true});state.vision.rules=d.visionRules||[];state.vision.timeline=d.visionTimeline||[];$("#projectNameInput").value=d.name||"Danke Project";$("#projectName").textContent=d.name||"Danke Project";renderRules();refreshTree();status("Projeto restaurado")}
+  function exportJSON(){saveAs(new Blob([JSON.stringify(projectData(),null,2)],{type:"application/json"}),`${safeName()}.danke.json`)}
+  async function exportGLB(){status("Exportando GLB…");const glb=await BABYLON.GLTF2Export.GLBAsync(state.scene,safeName(),{shouldExportNode:n=>!n.metadata?.system});glb.downloadFiles();status("GLB exportado")}
+  function safeName(){return($("#projectNameInput").value||"Danke-Project").replace(/[^a-z0-9-_]/gi,"-")}
+  function addRule(){state.vision.rules.push({id:uid(),label:$("#ruleLabel").value.trim()||"*",zone:$("#ruleZone").value,action:$("#ruleAction").value,last:0});renderRules();status("Regra visual adicionada")}
+  function renderRules(){$("#visionRules").innerHTML=state.vision.rules.map((r,i)=>`<div class="note">${i+1}. ${r.label} • ${r.zone} → ${r.action}</div>`).join("")}
+  function switchPanel(name){$$('[data-page]').forEach(p=>p.classList.toggle("hidden",p.dataset.page!==name));$$('#rail [data-panel]').forEach(b=>b.classList.toggle("active",b.dataset.panel===name));$("#leftTitle").textContent={create:"Criar",assets:"Assets",vision:"Vision Lab",behavior:"Automação",project:"Projeto"}[name]}
+  function undoHint(){status("Desfazer estará disponível no histórico da próxima versão")}
+
+  function setupUI(){
+    $$('#rail [data-panel]').forEach(b=>b.onclick=()=>switchPanel(b.dataset.panel));$$('[data-create]').forEach(b=>b.onclick=()=>create(b.dataset.create));$$('[data-gizmo]').forEach(b=>b.onclick=()=>setGizmo(b.dataset.gizmo));$$('[data-behavior]').forEach(b=>b.onclick=()=>addBehavior(b.dataset.behavior));
+    $("#enterVR").onclick=()=>enterXR("immersive-vr");$("#enterMR").onclick=()=>enterXR("immersive-ar");$("#togglePlay").onclick=()=>{state.playing=!state.playing;$("#togglePlay").textContent=state.playing?"■ Parar":"▶ Simular";$("#modeBadge").textContent=state.playing?"SIMULAÇÃO":"EDIÇÃO"};$("#saveProject").onclick=saveLocal;
+    $("#chooseAssets").onclick=()=>$("#assetInput").click();$("#assetInput").onchange=e=>importFiles([...e.target.files]);$$('[data-source]').forEach(b=>b.onclick=()=>{state.source=b.dataset.source;$$('[data-source]').forEach(x=>x.classList.toggle("active",x===b));$(".sketch-token").classList.toggle("hidden",state.source!=="sketchfab");$("#assetCredit").textContent=state.source==="polyhaven"?"Powered by Poly Haven • assets CC0":"Sketchfab Data API • respeite a licença de cada modelo"});$("#searchAssets").onclick=searchAssets;$("#assetSearch").onkeydown=e=>e.key==="Enter"&&searchAssets();
+    $("#scatterCount").oninput=e=>$("#scatterValue").textContent=`${e.target.value} instâncias`;$("#scatterGrid").onclick=()=>scatter("grid");$("#scatterCircle").onclick=()=>scatter("circle");$("#paintMode").onclick=()=>{state.paint=!state.paint;$("#paintMode").classList.toggle("primary",state.paint);status(state.paint?"Pincel procedural ativo":"Pincel desativado")};
+    $("#generateScene").onclick=()=>{const p=$("#scenePrompt").value.toLowerCase();if(p.includes("sala")||p.includes("room")){[[0,1.35,-3],[0,1.35,3],[-4,1.35,0],[4,1.35,0]].forEach((v,i)=>{const w=create("wall",{name:`Wall ${i+1}`,position:new BABYLON.Vector3(...v)});if(i<2)w.scaling.x=2;else{w.rotation.y=Math.PI/2;w.scaling.x=1.5}});create("door",{position:new BABYLON.Vector3(0,1.075,-2.9)});create("light",{position:new BABYLON.Vector3(0,2.5,0)})}else{create("box");create("sphere",{position:new BABYLON.Vector3(1.5,1,0)});create("ui",{position:new BABYLON.Vector3(-1.5,1.4,0)})}status("Composição gerada por regra local")};
+    $("#duplicateSelected").onclick=duplicate;$("#deleteSelected").onclick=removeSelected;$("#focusSelected").onclick=focus;
+    $$('[data-transform]').forEach(i=>i.onchange=()=>{if(!state.selected)return;const [g,a]=i.dataset.transform.split('.');state.selected[g][a]=g==="rotation"?BABYLON.Tools.ToRadians(+i.value):+i.value;refreshInspector()});
+    $("#materialColor").oninput=e=>{if(state.selected?.material?.albedoColor)state.selected.material.albedoColor=hex(e.target.value)};$("#emissiveColor").oninput=e=>{if(state.selected?.material)state.selected.material.emissiveColor=hex(e.target.value)};$("#metallic").oninput=e=>{if(state.selected?.material)state.selected.material.metallic=+e.target.value};$("#roughness").oninput=e=>{if(state.selected?.material)state.selected.material.roughness=+e.target.value};$("#alpha").oninput=e=>{if(state.selected?.material)state.selected.material.alpha=+e.target.value};
+    $("#startVisionSource").onclick=startVisionSource;$("#stopVisionSource").onclick=stopVisionSource;$("#visionFile").onchange=e=>{const f=e.target.files[0];if(f){$("#visionVideo").src=URL.createObjectURL(f);$("#visionVideo").play();$("#visionMessage").textContent=f.name}};$("#loadVisionModels").onclick=loadVisionModels;$("#startAnalysis").onclick=startAnalysis;$("#stopAnalysis").onclick=stopAnalysis;$("#openVisionPlayer").onclick=()=>$("#visionPlayer").style.display="grid";$("#closeVisionPlayer").onclick=()=>$("#visionPlayer").style.display="none";$("#confidence").oninput=e=>$("#confidenceValue").textContent=`${e.target.value}%`;$("#visionInterval").oninput=e=>$("#intervalValue").textContent=`${e.target.value} ms`;$("#addVisionRule").onclick=addRule;
+    $("#projectNameInput").oninput=e=>$("#projectName").textContent=e.target.value;$("#saveLocal").onclick=saveLocal;$("#loadLocal").onclick=loadLocal;$("#exportJSON").onclick=exportJSON;$("#importJSONBtn").onclick=()=>$("#projectFile").click();$("#projectFile").onchange=async e=>restoreProject(JSON.parse(await e.target.files[0].text()));$("#exportGLB").onclick=exportGLB;$("#screenshotBtn").onclick=()=>state.engine.getRenderingCanvas().toBlob(b=>saveAs(b,`${safeName()}.png`));
+    const vp=$("#viewport");["dragenter","dragover"].forEach(n=>vp.addEventListener(n,e=>{e.preventDefault();$("#dropHint").classList.add("show")}));["dragleave","drop"].forEach(n=>vp.addEventListener(n,e=>{e.preventDefault();$("#dropHint").classList.remove("show")}));vp.addEventListener("drop",e=>importFiles([...e.dataTransfer.files]));
+    window.addEventListener("keydown",e=>{if(e.target.matches("input,textarea,select"))return;if(e.key.toLowerCase()==="w")setGizmo("position");if(e.key.toLowerCase()==="e")setGizmo("rotation");if(e.key.toLowerCase()==="r")setGizmo("scale");if(e.key.toLowerCase()==="f")focus();if(e.key==="Delete")removeSelected();if(e.key==="Escape")state.gizmos.attachToMesh(null);if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="d"){e.preventDefault();duplicate()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();saveLocal()}});
+  }
+  init().catch(e=>{console.error(e);status(`Falha ao iniciar: ${e.message}`)});
+})();
+</script>
+
+<script type="module">
+  // Colaboração opcional P2P. É iniciada apenas se o usuário futuramente ativar uma sala.
+  window.DankeCollab = {
+    async connect(room, onUpdate){
+      const Y = await import("https://cdn.jsdelivr.net/npm/yjs/+esm");
+      const { WebrtcProvider } = await import("https://cdn.jsdelivr.net/npm/y-webrtc/+esm");
+      const doc = new Y.Doc();
+      const provider = new WebrtcProvider(`danke-${room}`, doc);
+      const scene = doc.getMap("scene");
+      scene.observe(()=>onUpdate?.(scene.toJSON()));
+      return {doc,provider,scene,disconnect:()=>provider.destroy()};
+    }
+  };
+</script>
+</body>
+</html>
