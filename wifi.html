@@ -3,128 +3,229 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RuView Spatial XR — Prototype &amp; Telemetry HUD</title>
+  <title>RuView Observatory — Spatial Intelligence &amp; Passthrough XR</title>
   
-  <!-- CDNs Públicas Serverless de Alta Velocidade -->
+  <!-- CDNs Públicas Serverless de Alta Performance -->
   <script src="https://cdn.jsdelivr.net/npm/aframe@1.6.0/dist/aframe-v1.6.0.min.js"></script>
   <script src="https://unpkg.com/aframe-environment-component@1.3.3/dist/aframe-environment-component.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
+  <!-- CDNs de Visão Computacional (MediaPipe Pose & Camera Utils) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  
   <style>
-    /* Overlay UI 2D adaptada para dispositivos móveis e desktop */
-    #ui-overlay {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      pointer-events: none;
-      z-index: 999;
-    }
+    #ui-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 999; }
     .interactive { pointer-events: auto; }
-    
-    /* Animação de pulsação para alertas de emergência */
-    @keyframes pulse-red {
-      0%, 100% { border-color: rgba(239, 68, 68, 0.8); box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
-      50% { border-color: rgba(239, 68, 68, 0.2); box-shadow: 0 0 5px rgba(239, 68, 68, 0.1); }
-    }
-    .alert-pulse { animation: pulse-red 1.2s infinite; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(6, 182, 212, 0.4); border-radius: 4px; }
+    @keyframes alert-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .animate-alert { animation: alert-pulse 1s infinite; }
   </style>
 </head>
 <body class="bg-gray-950 text-white font-sans overflow-hidden select-none">
 
-  <!-- ==================== DASHBOARD & CONTROLES 2D ==================== -->
-  <div id="ui-overlay" class="flex flex-col justify-between p-4">
+  <!-- DATASET TELEMETRIA EMBUTIDO (FALLBACK RUVIEW) -->
+  <script id="embedded-telemetry" type="application/json">
+  {
+    "device_info": { "node_id": "esp32_c6_ruview_01", "firmware": "v2.4.1-csi-sensing", "subcarriers": 234 },
+    "observatory_state": { "confidence": 85, "rssi": -44, "variance": 0.30, "motion": 0.022 },
+    "scenarios_data": {
+      "empty": { "persons": 0, "bpm": 0, "rpm": 0, "status": "ABSENT", "color": "#64748b" },
+      "vitals": { "persons": 1, "bpm": 72, "rpm": 16, "status": "PRESENT", "color": "#10b981" },
+      "multi": { "persons": 2, "bpm": 78, "rpm": 18, "status": "MULTI-TRACKING", "color": "#06b6d4" },
+      "fall": { "persons": 1, "bpm": 105, "rpm": 24, "status": "FALL DETECTED", "color": "#ef4444" },
+      "apnea": { "persons": 1, "bpm": 48, "rpm": 0, "status": "APNEA ALERT", "color": "#f59e0b" },
+      "intrusion": { "persons": 1, "bpm": 118, "rpm": 28, "status": "INTRUSION", "color": "#dc2626" },
+      "crowd": { "persons": 4, "bpm": 82, "rpm": 19, "status": "CROWD (4 PPL)", "color": "#8b5cf6" }
+    }
+  }
+  </script>
+
+  <!-- Video Oculto para MediaPipe -->
+  <video id="webcam-input" class="hidden" playsinline></video>
+
+  <!-- ==================== UI OVERLAY 2D ==================== -->
+  <div id="ui-overlay" class="flex flex-col justify-between p-3 sm:p-4">
     
-    <!-- Cabeçalho Principal -->
-    <div class="flex justify-between items-center bg-gray-900/90 backdrop-blur-md p-3.5 rounded-2xl border border-cyan-500/30 interactive shadow-xl">
+    <!-- Cabeçalho Principal (RuView Observatory Header) -->
+    <div class="flex justify-between items-center bg-gray-900/90 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-cyan-500/30 interactive shadow-2xl">
       <div class="flex items-center gap-3">
         <div class="p-2 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
-          <i class="fa-solid fa-wifi text-cyan-400 text-xl animate-pulse"></i>
+          <i class="fa-solid fa-wifi text-cyan-400 text-lg animate-pulse"></i>
         </div>
         <div>
-          <h1 class="font-bold text-base text-cyan-300 tracking-wide">RuView Spatial XR</h1>
-          <p class="text-xs text-gray-400">Sensoriamento Wi-Fi CSI NLoS &amp; UI Espacial Imersiva</p>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-sm sm:text-base text-cyan-300 tracking-wider uppercase">π RuView Observatory</h1>
+            <span class="text-[10px] bg-cyan-950 text-cyan-400 font-mono px-2 py-0.5 rounded border border-cyan-800">DEMO</span>
+          </div>
+          <p class="text-[11px] text-gray-400">WiFi DensePose Sensing &amp; Spatial Intelligence</p>
         </div>
       </div>
       
-      <div class="flex items-center gap-3 text-xs">
-        <div class="bg-gray-800/80 px-3 py-1.5 rounded-lg border border-gray-700/80 hidden sm:block">
-          <span class="text-gray-400">Paredes (NLoS):</span> 
-          <span class="text-emerald-400 font-semibold">Ativo (Zona Fresnel)</span>
-        </div>
-        <div id="status-badge" class="bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-500/30 font-semibold">
-          Simulação Ativa
-        </div>
-      </div>
-    </div>
-
-    <!-- Painel Lateral: Telemetria Fisiológica & Controles de Cenário -->
-    <div class="self-start bg-gray-900/90 backdrop-blur-md p-4 rounded-2xl border border-cyan-500/30 w-80 space-y-3.5 interactive shadow-2xl">
-      <div class="flex justify-between items-center border-b border-gray-800 pb-2">
-        <h2 class="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
-          <i class="fa-solid fa-heart-pulse text-red-400"></i> Telemetria do Alvo
-        </h2>
-        <span id="target-id-tag" class="text-[10px] bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800">
-          ALVO_01 (NLoS)
-        </span>
-      </div>
-      
-      <!-- Grid de Sinais Vitais -->
-      <div class="grid grid-cols-2 gap-2 text-center">
-        <div class="bg-gray-800/60 p-2.5 rounded-xl border border-gray-700/60">
-          <span class="text-gray-400 text-[10px] uppercase font-medium block">Batimentos (BPM)</span>
-          <span id="ui-bpm" class="text-2xl font-extrabold text-red-400 tracking-tight">72</span>
-        </div>
-        <div class="bg-gray-800/60 p-2.5 rounded-xl border border-gray-700/60">
-          <span class="text-gray-400 text-[10px] uppercase font-medium block">Respiração (RPM)</span>
-          <span id="ui-rpm" class="text-2xl font-extrabold text-blue-400 tracking-tight">16</span>
-        </div>
-      </div>
-
-      <!-- Métricas Fisiológicas e Estresse Autonômico -->
-      <div class="text-xs space-y-1.5 bg-gray-950/50 p-2.5 rounded-xl border border-gray-800">
-        <div class="flex justify-between">
-          <span class="text-gray-400">Estresse (LF/HF Ratio):</span>
-          <span id="ui-stress" class="text-cyan-300 font-mono">1.2 (Normal)</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-gray-400">Sinal Wi-Fi (CSI RSSI):</span>
-          <span id="ui-rssi" class="text-gray-300 font-mono">-42 dBm</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-gray-400">Status Fisiológico:</span>
-          <span id="ui-status-text" class="text-emerald-400 font-bold">Estável</span>
-        </div>
-      </div>
-
-      <!-- Seletor de Cenários Ergonomicamente Projetado -->
-      <div class="space-y-1.5 pt-1">
-        <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Seletor de Cenário Tático:</label>
-        <div class="grid grid-cols-3 gap-1">
-          <button onclick="setScenario('normal')" class="bg-gray-800 hover:bg-cyan-700 text-[11px] py-1.5 rounded-lg border border-gray-700 font-medium transition">
-            Normal
-          </button>
-          <button onclick="setScenario('panic')" class="bg-gray-800 hover:bg-amber-700 text-[11px] py-1.5 rounded-lg border border-gray-700 font-medium transition">
-            Pânico
-          </button>
-          <button onclick="setScenario('apnea')" class="bg-gray-800 hover:bg-red-700 text-[11px] py-1.5 rounded-lg border border-gray-700 font-medium transition">
-            Apneia
-          </button>
-        </div>
-      </div>
-
-      <!-- Conexão Externa (JSON Local ou WebSocket) -->
-      <div class="pt-2 border-t border-gray-800 space-y-1.5">
-        <button id="btn-load-json" onclick="loadLocalJSON()" class="w-full bg-cyan-600/80 hover:bg-cyan-500 text-xs py-2 rounded-xl font-semibold border border-cyan-400/40 transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-file-code"></i> Carregar telemetry.json
+      <!-- Controles de Ação Rápida e Status -->
+      <div class="flex items-center gap-2 text-xs">
+        <button onclick="toggleSettingsModal()" class="bg-gray-800 hover:bg-cyan-700 px-3 py-1.5 rounded-xl border border-gray-700 text-cyan-300 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-sliders"></i> <span class="hidden sm:inline">Settings [S]</span>
         </button>
+        <button id="btn-toggle-cv" onclick="toggleComputerVision()" class="bg-gray-800 hover:bg-cyan-700 px-3 py-1.5 rounded-xl border border-gray-700 text-cyan-300 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-video"></i> <span class="hidden sm:inline">Camera CV</span>
+        </button>
+        <div id="badge-presence" class="bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-500/30 font-bold font-mono">
+          ABSENT
+        </div>
       </div>
     </div>
 
-    <!-- Instrução de Entrada no Modo Passthrough / WebXR -->
-    <div class="self-center bg-gray-900/90 backdrop-blur-md px-6 py-2.5 rounded-full border border-cyan-500/40 text-center interactive shadow-lg">
-      <p class="text-xs text-gray-300">
-        No Meta Quest 3, clique no botão <span class="text-cyan-300 font-bold"><i class="fa-solid fa-vr-cardboard"></i> AR / VR</span> para ativar o <span class="text-cyan-300 font-bold">Passthrough de Realidade Mista</span>.
-      </p>
+    <!-- Layout Central: HUD de Sinais Vitais & Telemetria em Tempo Real -->
+    <div class="flex justify-between items-start mt-3 gap-3">
+      
+      <!-- Painel Esquerdo: Vital Signs & WiFi Telemetry -->
+      <div class="bg-gray-900/90 backdrop-blur-md p-3.5 rounded-2xl border border-cyan-500/30 w-72 sm:w-80 space-y-3 interactive shadow-2xl">
+        <div class="flex justify-between items-center border-b border-gray-800 pb-1.5">
+          <h2 class="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-heart-pulse text-red-400"></i> Sinais Vitais
+          </h2>
+          <span id="fps-counter" class="text-[10px] font-mono text-gray-400">60 FPS</span>
+        </div>
+
+        <!-- Metric Cards -->
+        <div class="grid grid-cols-2 gap-2 text-center">
+          <div class="bg-gray-950/60 p-2 rounded-xl border border-gray-800">
+            <span class="text-gray-400 text-[10px] uppercase font-semibold block">Heart Rate</span>
+            <span id="hud-bpm" class="text-xl font-extrabold text-red-400 font-mono">-- BPM</span>
+          </div>
+          <div class="bg-gray-950/60 p-2 rounded-xl border border-gray-800">
+            <span class="text-gray-400 text-[10px] uppercase font-semibold block">Respiration</span>
+            <span id="hud-rpm" class="text-xl font-extrabold text-blue-400 font-mono">-- RPM</span>
+          </div>
+        </div>
+
+        <!-- Telemetria do Sinal Wi-Fi CSI -->
+        <div class="space-y-1 text-[11px] bg-gray-950/80 p-2.5 rounded-xl border border-gray-800 font-mono">
+          <div class="flex justify-between"><span class="text-gray-400">Confidence:</span><span id="hud-conf" class="text-cyan-300">81%</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">WiFi RSSI:</span><span id="hud-rssi" class="text-gray-300">-44 dBm</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Variance / Motion:</span><span id="hud-var" class="text-gray-300">0.30 / 0.022</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Persons Detected:</span><span id="hud-persons" class="text-emerald-400 font-bold">0</span></div>
+        </div>
+
+        <!-- Seletor Rápido de Cenários -->
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Scenario [D]:</label>
+          <select id="scenario-select" onchange="changeScenario(this.value)" 
+                  class="w-full bg-gray-950 text-xs px-2.5 py-1.5 rounded-xl border border-cyan-800 text-cyan-300 focus:outline-none focus:border-cyan-400 interactive">
+            <option value="auto">Auto-Cycle (30s)</option>
+            <option value="empty" selected>Empty Room</option>
+            <option value="vitals">Vital Signs (Breathing)</option>
+            <option value="multi">Multi-Person Tracking</option>
+            <option value="fall">Fall Detection</option>
+            <option value="apnea">Sleep Monitoring (Apnea)</option>
+            <option value="gait">Elderly Care (Gait)</option>
+            <option value="fitness">Fitness Tracking</option>
+            <option value="intrusion">Intrusion Detection</option>
+            <option value="patrol">Security Patrol</option>
+            <option value="crowd">Crowd Occupancy (4 ppl)</option>
+            <option value="dtw">Gesture Control (DTW)</option>
+            <option value="rescue">Search &amp; Rescue (WiFi-Mat)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Preview da Câmera CV quando ativada -->
+      <div id="cv-container" class="hidden bg-gray-900/90 backdrop-blur-md p-2 rounded-2xl border border-cyan-500/30 w-48 interactive shadow-2xl">
+        <span class="text-[10px] font-bold text-cyan-400 uppercase block mb-1">Camera CV Feed</span>
+        <canvas id="cv-canvas" class="w-full h-32 bg-black rounded-xl object-cover"></canvas>
+      </div>
+    </div>
+
+    <!-- Rodapé: Atalhos Teclado & Guia Passthrough -->
+    <div class="flex flex-col sm:flex-row justify-between items-center gap-2 interactive">
+      <div class="bg-gray-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 text-[11px] font-mono text-gray-400">
+        [A] Orbit | [D] Scenario | [F] FPS | [S] Settings | [Space] Pause
+      </div>
+      <div class="bg-gray-900/90 backdrop-blur-md px-5 py-1.5 rounded-full border border-cyan-500/40 text-center shadow-lg">
+        <p class="text-xs text-gray-300">
+          No Meta Quest 3, clique em <span class="text-cyan-300 font-bold"><i class="fa-solid fa-vr-cardboard"></i> AR / VR</span> para o modo <span class="text-cyan-300 font-bold">Passthrough VST</span>.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== DRAWER MODAL DE CONFIGURAÇÕES [S] ==================== -->
+  <div id="settings-modal" class="hidden absolute inset-0 bg-black/60 backdrop-blur-sm z- flex items-center justify-center interactive p-4">
+    <div class="bg-gray-900 border border-cyan-500/40 rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="flex justify-between items-center px-6 py-3.5 border-b border-gray-800 bg-gray-950/60">
+        <h3 class="font-bold text-sm text-cyan-300 uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-sliders"></i> RuView Observatory Settings
+        </h3>
+        <button onclick="toggleSettingsModal()" class="text-gray-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- Modal Body (Abas & Sliders) -->
+      <div class="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1 text-xs">
+        
+        <!-- Style Presets -->
+        <div>
+          <label class="font-bold text-gray-300 uppercase block mb-2">Style Preset:</label>
+          <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            <button onclick="applyPreset('default')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Foundation</button>
+            <button onclick="applyPreset('cinematic')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Cinematic</button>
+            <button onclick="applyPreset('clean')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Minimal</button>
+            <button onclick="applyPreset('neon')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Neon Glow</button>
+            <button onclick="applyPreset('tactical')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Tactical</button>
+            <button onclick="applyPreset('medical')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Medical</button>
+          </div>
+        </div>
+
+        <!-- Wireframe & Joints Controls -->
+        <div class="space-y-3 pt-2 border-t border-gray-800">
+          <h4 class="font-bold text-cyan-400 uppercase">Wireframe &amp; Joints</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <div class="flex justify-between text-gray-400 mb-1"><span>Bone Thickness</span><span id="val-thickness">0.018</span></div>
+              <input type="range" min="0.005" max="0.05" step="0.001" value="0.018" oninput="updateSetting('thickness', this.value)" class="w-full accent-cyan-400">
+            </div>
+            <div>
+              <div class="flex justify-between text-gray-400 mb-1"><span>Joint Size</span><span id="val-jointsize">0.035</span></div>
+              <input type="range" min="0.01" max="0.08" step="0.005" value="0.035" oninput="updateSetting('jointsize', this.value)" class="w-full accent-cyan-400">
+            </div>
+          </div>
+        </div>
+
+        <!-- Signal & Scene Environment Controls -->
+        <div class="space-y-3 pt-2 border-t border-gray-800">
+          <h4 class="font-bold text-cyan-400 uppercase">Signal Field &amp; Scene</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <div class="flex justify-between text-gray-400 mb-1"><span>Signal Field Opacity</span><span id="val-signal">0.45</span></div>
+              <input type="range" min="0" max="1" step="0.05" value="0.45" oninput="updateSetting('signal', this.value)" class="w-full accent-cyan-400">
+            </div>
+            <div>
+              <div class="flex justify-between text-gray-400 mb-1"><span>Room Brightness</span><span id="val-brightness">0.70</span></div>
+              <input type="range" min="0.1" max="2.0" step="0.05" value="0.70" oninput="updateSetting('brightness', this.value)" class="w-full accent-cyan-400">
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Source Config -->
+        <div class="space-y-3 pt-2 border-t border-gray-800">
+          <h4 class="font-bold text-cyan-400 uppercase">Data Source Configuration</h4>
+          <div class="space-y-2">
+            <input id="ws-url-input" type="text" value="ws://localhost:3000/ws" 
+                   class="w-full bg-gray-950 px-3 py-2 rounded-xl border border-gray-700 text-gray-300 focus:outline-none focus:border-cyan-400 font-mono" placeholder="ws://IP_DO_RUVIEW:3000/ws">
+            <button onclick="connectWebSocket()" class="w-full bg-cyan-600 hover:bg-cyan-500 py-2 rounded-xl font-bold transition">
+              Conectar Live WebSocket
+            </button>
+          </div>
+        </div>
+
+      </div>
+
     </div>
   </div>
 
@@ -132,48 +233,37 @@
   <a-scene 
     webxr="optionalFeatures: hit-test, local-floor, passthrough, hand-tracking; requiredFeatures: local-floor;"
     xr-mode-ui="enabled: true; enterAREntry: true;"
-    renderer="colorManagement: true; antialias: true;"
+    renderer="alpha: true; colorManagement: true; antialias: true;"
     embedded class="w-full h-full">
 
-    <!-- Iluminação da Cena -->
-    <a-light type="ambient" intensity="0.7"></a-light>
+    <!-- Iluminação -->
+    <a-light id="ambient-light" type="ambient" intensity="0.7"></a-light>
     <a-light type="directional" position="2 4 -2" intensity="0.8"></a-light>
 
-    <!-- Ambiente VR (Ocultado automaticamente ao ativar Passthrough em AR) -->
+    <!-- Ambiente VR (Ocultado em Passthrough AR) -->
     <a-entity id="vr-environment" environment="preset: neon; skyType: atmosphere; grid: lines; gridColor: #00f0ff" hide-on-enter-ar></a-entity>
 
-    <!-- Câmera & Controladores do Meta Quest 3 -->
+    <!-- Rig de Câmera -->
     <a-entity id="rig" position="0 0 0">
       <a-camera id="camera" position="0 1.6 0" look-controls wasd-controls></a-camera>
       <a-entity oculus-touch-controls="hand: left"></a-entity>
       <a-entity oculus-touch-controls="hand: right"></a-entity>
     </a-entity>
 
-    <!-- Alvo Rastreado via Wi-Fi CSI (Posicionado a 2.5m de distância) -->
-    <a-entity id="ruview-target" position="0 0 -2.5">
-      
-      <!-- Anel de Varredura RF no Chão -->
-      <a-ring rotation="-90 0 0" radius-inner="0.35" radius-outer="0.65" color="#00f0ff" opacity="0.3"
-              animation="property: scale; to: 1.15 1.15 1.15; dir: alternate; loop: true; dur: 1800"></a-ring>
-              
-      <!-- Contêiner do Esqueleto de 17 Keypoints -->
-      <a-entity id="skeleton-container"></a-entity>
+    <!-- Sinal RF / Anel de Fresnel -->
+    <a-ring id="signal-ring" position="0 0 -2.5" rotation="-90 0 0" radius-inner="0.3" radius-outer="0.8" color="#00f0ff" opacity="0.45"
+            animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; loop: true; dur: 1500"></a-ring>
 
-      <!-- HUD 3D Flutuante e Ergonômico sobre o Alvo (Zona de Conforto Visual > 1.2m) -->
-      <a-entity id="hud-3d-target" position="0 2.1 0">
-        <a-plane id="hud-bg-plane" color="#0b1329" opacity="0.88" width="1.8" height="0.6" radius="0.04" material="shader: flat;">
-          <a-text id="hud-3d-title" value="ALVO RUVIEW (ATRAS DA PAREDE)" align="center" position="0 0.18 0.01" scale="0.45 0.45 0.45" color="#00f0ff"></a-text>
-          <a-text id="hud-3d-vitals" value="BPM: 72 | RPM: 16" align="center" position="0 0.02 0.01" scale="0.6 0.6 0.6" color="#ffffff"></a-text>
-          <a-text id="hud-3d-status" value="Estresse (LF/HF): 1.2 | Status: Normal" align="center" position="0 -0.16 0.01" scale="0.38 0.38 0.38" color="#10b981"></a-text>
-        </a-plane>
-      </a-entity>
-    </a-entity>
+    <!-- Contêiner de Múltiplos Esqueletos Tridimensionais -->
+    <a-entity id="skeletons-group"></a-entity>
 
   </a-scene>
 
-  <!-- ==================== LÓGICA & MOTOR DE SIMULAÇÃO ==================== -->
+  <!-- ==================== LÓGICA DO MOTOR RUVIEW OBSERVATORY ==================== -->
   <script>
-    // Estrutura de 17 Keypoints Articulares do Esqueleto
+    const telemetryData = JSON.parse(document.getElementById('embedded-telemetry').textContent);
+    
+    // Mapeamento das 17 Articulações
     const KEYPOINT_NAMES = [
       'nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
       'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow',
@@ -181,20 +271,6 @@
       'left_knee', 'right_knee', 'left_ankle', 'right_ankle'
     ];
 
-    // Posições Anatômicas Base (Coordenadas Locais)
-    let baseJoints = {
-      nose: [0, 1.65, 0],
-      left_eye: [-0.05, 1.7, 0.05], right_eye: [0.05, 1.7, 0.05],
-      left_ear: [-0.1, 1.68, -0.05], right_ear: [0.1, 1.68, -0.05],
-      left_shoulder: [-0.22, 1.42, 0], right_shoulder: [0.22, 1.42, 0],
-      left_elbow: [-0.32, 1.15, 0], right_elbow: [0.32, 1.15, 0],
-      left_wrist: [-0.35, 0.9, 0.1], right_wrist: [0.35, 0.9, 0.1],
-      left_hip: [-0.15, 0.95, 0], right_hip: [0.15, 0.95, 0],
-      left_knee: [-0.16, 0.5, 0], right_knee: [0.16, 0.5, 0],
-      left_ankle: [-0.17, 0.05, 0], right_ankle: [0.17, 0.05, 0]
-    };
-
-    // Conexões dos Ossos
     const BONE_CONNECTIONS = [
       ['left_shoulder', 'right_shoulder'],
       ['left_shoulder', 'left_elbow'], ['left_elbow', 'left_wrist'],
@@ -205,143 +281,230 @@
       ['right_hip', 'right_knee'], ['right_knee', 'right_ankle']
     ];
 
-    let jointElements = {};
-    let boneElements = [];
-    let currentScenario = 'normal';
-    let simTime = 0;
-
-    // Configurações dos Cenários Táticos
-    const SCENARIOS = {
-      normal: { bpm: 72, rpm: 16, stress: "1.2 (Normal)", statusText: "Estável", color: "#10b981", planeColor: "#0b1329" },
-      panic:  { bpm: 118, rpm: 28, stress: "2.8 (Elevado)", statusText: "Alerta de Pânico", color: "#f59e0b", planeColor: "#29180b" },
-      apnea:  { bpm: 48, rpm: 0, stress: "0.4 (Crítico)", statusText: "APNEIA / EMERGÊNCIA", color: "#ef4444", planeColor: "#3b0707" }
+    // Estado Global da Aplicação
+    let state = {
+      scenario: 'empty',
+      jointSize: 0.035,
+      boneThickness: 0.018,
+      wireframeColor: '#00f0ff',
+      jointColor: '#ff4060',
+      isPaused: false,
+      isCVActive: false,
+      autoCycle: false,
+      simTime: 0
     };
 
+    let activeSkeletons = [];
+    let cameraUtils = null;
+    let poseNet = null;
+
     document.addEventListener('DOMContentLoaded', () => {
-      const container = document.getElementById('skeleton-container');
+      // Registrar atalhos de teclado
+      window.addEventListener('keydown', handleKeyPress);
 
-      // Instanciar Esferas para Articulações
-      Object.keys(baseJoints).forEach(joint => {
-        const sphere = document.createElement('a-sphere');
-        sphere.setAttribute('radius', '0.032');
-        sphere.setAttribute('color', '#ff4060');
-        sphere.setAttribute('material', 'emissive: #ff1030; emissiveIntensity: 0.8;');
-        container.appendChild(sphere);
-        jointElements[joint] = sphere;
+      // Listener WebXR Passthrough
+      const scene = document.querySelector('a-scene');
+      scene.addEventListener('enter-vr', () => {
+        if (scene.is('ar-mode')) {
+          document.getElementById('vr-environment').setAttribute('visible', 'false');
+        }
       });
 
-      // Instanciar Cilindros para Ossos
-      BONE_CONNECTIONS.forEach(() => {
-        const cylinder = document.createElement('a-cylinder');
-        cylinder.setAttribute('radius', '0.011');
-        cylinder.setAttribute('color', '#00f0ff');
-        cylinder.setAttribute('material', 'opacity: 0.85; transparent: true; emissive: #00a0ff; emissiveIntensity: 0.5;');
-        container.appendChild(cylinder);
-        boneElements.push(cylinder);
-      });
-
-      // Iniciar Loop de Renderização
-      requestAnimationFrame(renderLoop);
+      // Iniciar com o cenário Padrão
+      changeScenario('empty');
+      requestAnimationFrame(mainRenderLoop);
     });
 
-    // Alterar Cenários Manualmente
-    function setScenario(scen) {
-      currentScenario = scen;
-      const data = SCENARIOS[scen];
+    // Manipulação de Atalhos de Teclado ([A], [D], [F], [S], [Space])
+    function handleKeyPress(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
       
-      document.getElementById('ui-bpm').textContent = data.bpm;
-      document.getElementById('ui-rpm').textContent = data.rpm;
-      document.getElementById('ui-stress').textContent = data.stress;
-      document.getElementById('ui-status-text').textContent = data.statusText;
-      document.getElementById('ui-status-text').style.color = data.color;
-
-      // Atualizar HUD 3D
-      const hudVitals = document.getElementById('hud-3d-vitals');
-      const hudStatus = document.getElementById('hud-3d-status');
-      const hudBg = document.getElementById('hud-bg-plane');
-
-      if (hudVitals) hudVitals.setAttribute('value', `BPM: ${data.bpm} | RPM: ${data.rpm}`);
-      if (hudStatus) {
-        hudStatus.setAttribute('value', `Estresse: ${data.stress} | Status: ${data.statusText}`);
-        hudStatus.setAttribute('color', data.color);
+      const key = e.key.toLowerCase();
+      if (key === 's') toggleSettingsModal();
+      if (key === ' ') state.isPaused = !state.isPaused;
+      if (key === 'd') {
+        const select = document.getElementById('scenario-select');
+        select.selectedIndex = (select.selectedIndex + 1) % select.options.length;
+        changeScenario(select.value);
       }
-      if (hudBg) hudBg.setAttribute('color', data.planeColor);
     }
 
-    // Carregar JSON Estático Local
-    function loadLocalJSON() {
-      fetch('telemetry.json')
-        .then(res => res.json())
-        .then(data => {
-          document.getElementById('ui-bpm').textContent = data.vitals.heart_rate_bpm;
-          document.getElementById('ui-rpm').textContent = data.vitals.breathing_rate_rpm;
-          document.getElementById('ui-stress').textContent = `${data.vitals.lf_hf_ratio} (${data.vitals.stress_level})`;
-          document.getElementById('ui-status-text').textContent = data.vitals.apnea_detected ? "APNEIA DETECTADA" : "Dados do JSON";
-          
-          if (data.pose_3d_17_keypoints) {
-            renderSkeleton(data.pose_3d_17_keypoints);
-          }
-          
-          const badge = document.getElementById('status-badge');
-          badge.textContent = "JSON Carregado";
-          badge.className = "bg-cyan-500/10 text-cyan-400 px-3 py-1.5 rounded-lg border border-cyan-500/30 font-semibold";
-        })
-        .catch(err => alert("Certifique-se de que o arquivo 'telemetry.json' está na mesma pasta no GitHub: " + err.message));
+    function toggleSettingsModal() {
+      document.getElementById('settings-modal').classList.toggle('hidden');
     }
 
-    // Renderização Tridimensional do Esqueleto
-    function renderSkeleton(joints) {
-      Object.keys(joints).forEach(joint => {
-        if (jointElements[joint]) {
-          const pos = joints[joint];
-          jointElements[joint].setAttribute('position', `${pos[0]} ${pos[1]} ${pos[2]}`);
+    // Alteração de Cenários do RuView Observatory
+    function changeScenario(scenKey) {
+      state.scenario = scenKey;
+      state.autoCycle = (scenKey === 'auto');
+
+      const group = document.getElementById('skeletons-group');
+      group.innerHTML = '';
+      activeSkeletons = [];
+
+      const scenInfo = telemetryData.scenarios_data[scenKey] || telemetryData.scenarios_data['vitals'];
+      
+      // Atualizar HUD
+      document.getElementById('hud-bpm').textContent = scenInfo.bpm ? `${scenInfo.bpm} BPM` : '-- BPM';
+      document.getElementById('hud-rpm').textContent = scenInfo.rpm !== undefined ? `${scenInfo.rpm} RPM` : '-- RPM';
+      document.getElementById('hud-persons').textContent = scenInfo.persons;
+      
+      const badge = document.getElementById('badge-presence');
+      badge.textContent = scenInfo.status;
+      badge.style.color = scenInfo.color;
+
+      // Criar a quantidade necessária de esqueletos para o cenário
+      for (let i = 0; i < scenInfo.persons; i++) {
+        const skelEntity = createSkeletonEntity(i, scenInfo.persons);
+        group.appendChild(skelEntity.container);
+        activeSkeletons.push(skelEntity);
+      }
+    }
+
+    // Gerar Entidade 3D de Esqueleto com 17 Keypoints
+    function createSkeletonEntity(index, total) {
+      const container = document.createElement('a-entity');
+      const offsetX = (index - (total - 1) / 2) * 1.6;
+      container.setAttribute('position', `${offsetX} 0 -2.5`);
+
+      let jointEls = {};
+      let boneEls = [];
+
+      // Articulações
+      KEYPOINT_NAMES.forEach(j => {
+        const sphere = document.createElement('a-sphere');
+        sphere.setAttribute('radius', state.jointSize);
+        sphere.setAttribute('color', state.jointColor);
+        sphere.setAttribute('material', 'emissive: #ff1030; emissiveIntensity: 0.8;');
+        container.appendChild(sphere);
+        jointEls[j] = sphere;
+      });
+
+      // Ossos
+      BONE_CONNECTIONS.forEach(() => {
+        const cyl = document.createElement('a-cylinder');
+        cyl.setAttribute('radius', state.boneThickness);
+        cyl.setAttribute('color', state.wireframeColor);
+        cyl.setAttribute('material', 'opacity: 0.85; transparent: true; emissive: #00f0ff;');
+        container.appendChild(cyl);
+        boneEls.push(cyl);
+      });
+
+      return { container, jointEls, boneEls, offsetX };
+    }
+
+    // Renderizar Esqueleto na Posição Correta
+    function updateSkeletonPose(skel, joints) {
+      Object.keys(joints).forEach(j => {
+        if (skel.jointEls[j]) {
+          const pos = joints[j];
+          skel.jointEls[j].setAttribute('position', `${pos} ${pos} ${pos}`);
         }
       });
 
-      BONE_CONNECTIONS.forEach((pair, index) => {
-        const p1 = joints[pair[0]];
-        const p2 = joints[pair[1]];
-        if (p1 && p2 && boneElements[index]) {
-          const cylinder = boneElements[index];
-          
-          const midX = (p1[0] + p2[0]) / 2;
-          const midY = (p1[1] + p2[1]) / 2;
-          const midZ = (p1[2] + p2[2]) / 2;
+      BONE_CONNECTIONS.forEach((pair, idx) => {
+        const p1 = joints[pair];
+        const p2 = joints[pair];
+        if (p1 && p2 && skel.boneEls[idx]) {
+          const cyl = skel.boneEls[idx];
+          const mid = [(p1+p2)/2, (p1+p2)/2, (p1+p2)/2];
+          const d = [p2-p1, p2-p1, p2-p1];
+          const dist = Math.sqrt(d*d + d*d + d*d);
 
-          const dx = p2[0] - p1[0];
-          const dy = p2[1] - p1[1];
-          const dz = p2[2] - p1[2];
-          const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+          cyl.setAttribute('position', `${mid} ${mid} ${mid}`);
+          cyl.setAttribute('height', dist || 0.01);
 
-          cylinder.setAttribute('position', `${midX} ${midY} ${midZ}`);
-          cylinder.setAttribute('height', distance || 0.01);
-
-          const rotX = Math.atan2(Math.sqrt(dx*dx + dz*dz), dy) * (180 / Math.PI);
-          const rotY = Math.atan2(dx, dz) * (180 / Math.PI);
-          cylinder.setAttribute('rotation', `${rotX} ${rotY} 0`);
+          const rotX = Math.atan2(Math.sqrt(d*d + d*d), d) * (180 / Math.PI);
+          const rotY = Math.atan2(d, d) * (180 / Math.PI);
+          cyl.setAttribute('rotation', `${rotX} ${rotY} 0`);
         }
       });
     }
 
-    // Loop do Simulador Sintético (Cinemática Respiratória & Cardíaca)
-    function renderLoop() {
-      simTime += 0.03;
-      const scenData = SCENARIOS[currentScenario];
+    // Motor de Animação e Simulação Cinemática
+    function mainRenderLoop() {
+      if (!state.isPaused) {
+        state.simTime += 0.03;
 
-      // Oscilação Torácica baseada na Frequência Respiratória (RPM)
-      const respFreqHz = (scenData.rpm || 12) / 60;
-      const chestExpansion = scenData.rpm === 0 ? 0 : Math.sin(simTime * respFreqHz * Math.PI * 2) * 0.014;
+        activeSkeletons.forEach((skel, i) => {
+          let joints = {};
+          const isFall = (state.scenario === 'fall');
+          const respOffset = Math.sin(state.simTime * 2 + i) * 0.015;
 
-      let currentJoints = {};
-      Object.keys(baseJoints).forEach(j => {
-        const base = baseJoints[j];
-        let dz = base[2] + (j.includes('shoulder') || j.includes('nose') ? chestExpansion : 0);
-        let dx = base[0] + Math.sin(simTime + base[1]) * 0.008;
-        currentJoints[j] = [dx, base[1], dz];
-      });
+          const baseCoords = {
+            nose: [0, isFall ? 0.3 : 1.65, 0],
+            left_shoulder: [-0.22, isFall ? 0.25 : 1.42, respOffset],
+            right_shoulder: [0.22, isFall ? 0.25 : 1.42, respOffset],
+            left_elbow: [-0.32, isFall ? 0.2 : 1.15, 0],
+            right_elbow: [0.32, isFall ? 0.2 : 1.15, 0],
+            left_wrist: [-0.35, isFall ? 0.15 : 0.9, 0],
+            right_wrist: [0.35, isFall ? 0.15 : 0.9, 0],
+            left_hip: [-0.15, isFall ? 0.2 : 0.95, 0],
+            right_hip: [0.15, isFall ? 0.2 : 0.95, 0],
+            left_knee: [-0.16, isFall ? 0.1 : 0.5, 0],
+            right_knee: [0.16, isFall ? 0.1 : 0.5, 0],
+            left_ankle: [-0.17, 0.05, 0],
+            right_ankle: [0.17, 0.05, 0]
+          };
 
-      renderSkeleton(currentJoints);
-      requestAnimationFrame(renderLoop);
+          Object.keys(baseCoords).forEach(k => {
+            const c = baseCoords[k];
+            joints[k] = [c + Math.sin(state.simTime + i) * 0.005, c, c];
+          });
+
+          updateSkeletonPose(skel, joints);
+        });
+      }
+
+      requestAnimationFrame(mainRenderLoop);
+    }
+
+    // Atualização Dinâmica de Configurações
+    function updateSetting(key, val) {
+      if (key === 'thickness') {
+        state.boneThickness = parseFloat(val);
+        document.getElementById('val-thickness').textContent = val;
+      }
+      if (key === 'jointsize') {
+        state.jointSize = parseFloat(val);
+        document.getElementById('val-jointsize').textContent = val;
+      }
+      if (key === 'brightness') {
+        document.getElementById('ambient-light').setAttribute('intensity', val);
+        document.getElementById('val-brightness').textContent = val;
+      }
+      if (key === 'signal') {
+        document.getElementById('signal-ring').setAttribute('opacity', val);
+        document.getElementById('val-signal').textContent = val;
+      }
+    }
+
+    // Presets de Estilo Visual
+    function applyPreset(type) {
+      if (type === 'neon') {
+        state.wireframeColor = '#00f0ff';
+        state.jointColor = '#ff0055';
+      } else if (type === 'tactical') {
+        state.wireframeColor = '#10b981';
+        state.jointColor = '#f59e0b';
+      } else if (type === 'medical') {
+        state.wireframeColor = '#3b82f6';
+        state.jointColor = '#ef4444';
+      }
+      changeScenario(state.scenario);
+    }
+
+    // Ativar Câmera CV (MediaPipe Pose)
+    async function toggleComputerVision() {
+      const container = document.getElementById('cv-container');
+      if (!state.isCVActive) {
+        container.classList.remove('hidden');
+        state.isCVActive = true;
+        // Iniciar MediaPipe no canvas de preview
+      } else {
+        container.classList.add('hidden');
+        state.isCVActive = false;
+      }
     }
   </script>
 </body>
