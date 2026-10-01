@@ -1,0 +1,53 @@
+{
+  "device_info": {
+    "node_id": "esp32_c6_ruview_01",
+    "firmware": "v2.4.1-csi-sensing",
+    "channel_freq_mhz": 5180,
+    "bandwidth_mhz": 80,
+    "subcarriers_count": 234
+  },
+  "target_metadata": {
+    "target_id": "ALVO_01",
+    "timestamp_utc": "2026-09-30T19:15:00.000Z",
+    "presence_detected": true,
+    "nlos_through_wall": true,
+    "wall_material": "concrete_15cm",
+    "rssi_dbm": -42.5,
+    "fresnel_zone": "primary_ellipse_active"
+  },
+  "vitals": {
+    "heart_rate_bpm": 74,
+    "breathing_rate_rpm": 16,
+    "hrv_sdnn_ms": 48.2,
+    "hrv_rmssd_ms": 32.5,
+    "lf_hf_ratio": 1.25,
+    "stress_level": "Normal",
+    "apnea_detected": false
+  },
+  "pose_3d_17_keypoints": {
+    "nose": [0.0, 1.65, 0.0],
+    "left_eye": [-0.05, 1.7, 0.05],
+    "right_eye": [0.05, 1.7, 0.05],
+    "left_ear": [-0.1, 1.68, -0.05],
+    "right_ear": [0.1, 1.68, -0.05],
+    "left_shoulder": [-0.22, 1.42, 0.0],
+    "right_shoulder": [0.22, 1.42, 0.0],
+    "left_elbow": [-0.32, 1.15, 0.0],
+    "right_elbow": [0.32, 1.15, 0.0],
+    "left_wrist": [-0.35, 0.9, 0.1],
+    "right_wrist": [0.35, 0.9, 0.1],
+    "left_hip": [-0.15, 0.95, 0.0],
+    "right_hip": [0.15, 0.95, 0.0],
+    "left_knee": [-0.16, 0.5, 0.0],
+    "right_knee": [0.16, 0.5, 0.0],
+    "left_ankle": [-0.17, 0.05, 0.0],
+    "right_ankle": [0.17, 0.05, 0.0]
+  },
+  "security_alerts": [
+    {
+      "code": "WALL_PENETRATION_ACTIVE",
+      "severity": "info",
+      "message": "Detecção mantida através da barreira física via RF CSI."
+    }
+  ]
+}
