@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RuView Observatory — Spatial Intelligence &amp; Passthrough XR</title>
+  <title>RuView Observatory — Real-Time Spatial XR &amp; WiFi Sensing</title>
   
   <!-- CDNs Públicas Serverless de Alta Performance -->
   <script src="https://cdn.jsdelivr.net/npm/aframe@1.6.0/dist/aframe-v1.6.0.min.js"></script>
@@ -22,29 +22,29 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(6, 182, 212, 0.4); border-radius: 4px; }
     @keyframes alert-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-    .animate-alert { animation: alert-pulse 1s infinite; }
+    .animate-alert { animation: alert-pulse 1.2s infinite; }
   </style>
 </head>
 <body class="bg-gray-950 text-white font-sans overflow-hidden select-none">
 
-  <!-- DATASET TELEMETRIA EMBUTIDO (FALLBACK RUVIEW) -->
+  <!-- DATASET TELEMETRIA EMBUTIDO (RUVIEW DATASET FALLBACK) -->
   <script id="embedded-telemetry" type="application/json">
   {
     "device_info": { "node_id": "esp32_c6_ruview_01", "firmware": "v2.4.1-csi-sensing", "subcarriers": 234 },
-    "observatory_state": { "confidence": 85, "rssi": -44, "variance": 0.30, "motion": 0.022 },
+    "observatory_state": { "confidence": 88, "rssi": -42, "variance": 0.28, "motion": 0.018 },
     "scenarios_data": {
-      "empty": { "persons": 0, "bpm": 0, "rpm": 0, "status": "ABSENT", "color": "#64748b" },
-      "vitals": { "persons": 1, "bpm": 72, "rpm": 16, "status": "PRESENT", "color": "#10b981" },
-      "multi": { "persons": 2, "bpm": 78, "rpm": 18, "status": "MULTI-TRACKING", "color": "#06b6d4" },
-      "fall": { "persons": 1, "bpm": 105, "rpm": 24, "status": "FALL DETECTED", "color": "#ef4444" },
-      "apnea": { "persons": 1, "bpm": 48, "rpm": 0, "status": "APNEA ALERT", "color": "#f59e0b" },
-      "intrusion": { "persons": 1, "bpm": 118, "rpm": 28, "status": "INTRUSION", "color": "#dc2626" },
-      "crowd": { "persons": 4, "bpm": 82, "rpm": 19, "status": "CROWD (4 PPL)", "color": "#8b5cf6" }
+      "empty": { "persons": 0, "bpm": 0, "rpm": 0, "status": "SEM OCUPANTES", "color": "#64748b" },
+      "vitals": { "persons": 1, "bpm": 74, "rpm": 16, "status": "ESTÁVEL (NLoS)", "color": "#10b981" },
+      "multi": { "persons": 2, "bpm": 82, "rpm": 18, "status": "RASTREAMENTO MÚLTIPLO", "color": "#06b6d4" },
+      "fall": { "persons": 1, "bpm": 108, "rpm": 26, "status": "ALERTA DE QUEDA", "color": "#ef4444" },
+      "apnea": { "persons": 1, "bpm": 46, "rpm": 0, "status": "EMERGÊNCIA APNEIA", "color": "#f59e0b" },
+      "intrusion": { "persons": 1, "bpm": 120, "rpm": 30, "status": "INVASÃO DE PERÍMETRO", "color": "#dc2626" },
+      "crowd": { "persons": 4, "bpm": 85, "rpm": 20, "status": "LOTAÇÃO (4 PESSOAS)", "color": "#8b5cf6" }
     }
   }
   </script>
 
-  <!-- Video Oculto para MediaPipe -->
+  <!-- Video Oculto para MediaPipe Pose -->
   <video id="webcam-input" class="hidden" playsinline></video>
 
   <!-- ==================== UI OVERLAY 2D ==================== -->
@@ -58,10 +58,10 @@
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <h1 class="font-bold text-sm sm:text-base text-cyan-300 tracking-wider uppercase">π RuView Observatory</h1>
-            <span class="text-[10px] bg-cyan-950 text-cyan-400 font-mono px-2 py-0.5 rounded border border-cyan-800">DEMO</span>
+            <h1 class="font-bold text-sm sm:text-base text-cyan-300 tracking-wider uppercase">π RuView Spatial XR</h1>
+            <span class="text-[10px] bg-cyan-950 text-cyan-400 font-mono px-2 py-0.5 rounded border border-cyan-800">LIVE</span>
           </div>
-          <p class="text-[11px] text-gray-400">WiFi DensePose Sensing &amp; Spatial Intelligence</p>
+          <p class="text-[11px] text-gray-400">Sensoriamento Wi-Fi CSI NLoS &amp; Realidade Mista WebXR</p>
         </div>
       </div>
       
@@ -71,79 +71,85 @@
           <i class="fa-solid fa-sliders"></i> <span class="hidden sm:inline">Settings [S]</span>
         </button>
         <button id="btn-toggle-cv" onclick="toggleComputerVision()" class="bg-gray-800 hover:bg-cyan-700 px-3 py-1.5 rounded-xl border border-gray-700 text-cyan-300 transition flex items-center gap-1.5">
-          <i class="fa-solid fa-video"></i> <span class="hidden sm:inline">Camera CV</span>
+          <i class="fa-solid fa-video"></i> <span class="hidden sm:inline">Câmera CV</span>
         </button>
         <div id="badge-presence" class="bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-500/30 font-bold font-mono">
-          ABSENT
+          ESTÁVEL (NLoS)
         </div>
       </div>
     </div>
 
-    <!-- Layout Central: HUD de Sinais Vitais & Telemetria em Tempo Real -->
+    <!-- Layout Central: HUD de Sinais Vitais & Conexão WebSocket -->
     <div class="flex justify-between items-start mt-3 gap-3">
       
-      <!-- Painel Esquerdo: Vital Signs & WiFi Telemetry -->
+      <!-- Painel Esquerdo: Sinais Vitais & Telemetria em Tempo Real -->
       <div class="bg-gray-900/90 backdrop-blur-md p-3.5 rounded-2xl border border-cyan-500/30 w-72 sm:w-80 space-y-3 interactive shadow-2xl">
         <div class="flex justify-between items-center border-b border-gray-800 pb-1.5">
           <h2 class="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-            <i class="fa-solid fa-heart-pulse text-red-400"></i> Sinais Vitais
+            <i class="fa-solid fa-heart-pulse text-red-400"></i> Telemetria Fisiológica
           </h2>
-          <span id="fps-counter" class="text-[10px] font-mono text-gray-400">60 FPS</span>
+          <span id="conn-status" class="text-[10px] font-mono text-amber-400 font-bold">Simulação Local</span>
         </div>
 
         <!-- Metric Cards -->
         <div class="grid grid-cols-2 gap-2 text-center">
           <div class="bg-gray-950/60 p-2 rounded-xl border border-gray-800">
             <span class="text-gray-400 text-[10px] uppercase font-semibold block">Heart Rate</span>
-            <span id="hud-bpm" class="text-xl font-extrabold text-red-400 font-mono">-- BPM</span>
+            <span id="hud-bpm" class="text-xl font-extrabold text-red-400 font-mono">74 BPM</span>
           </div>
           <div class="bg-gray-950/60 p-2 rounded-xl border border-gray-800">
             <span class="text-gray-400 text-[10px] uppercase font-semibold block">Respiration</span>
-            <span id="hud-rpm" class="text-xl font-extrabold text-blue-400 font-mono">-- RPM</span>
+            <span id="hud-rpm" class="text-xl font-extrabold text-blue-400 font-mono">16 RPM</span>
           </div>
         </div>
 
         <!-- Telemetria do Sinal Wi-Fi CSI -->
         <div class="space-y-1 text-[11px] bg-gray-950/80 p-2.5 rounded-xl border border-gray-800 font-mono">
-          <div class="flex justify-between"><span class="text-gray-400">Confidence:</span><span id="hud-conf" class="text-cyan-300">81%</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">WiFi RSSI:</span><span id="hud-rssi" class="text-gray-300">-44 dBm</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">Variance / Motion:</span><span id="hud-var" class="text-gray-300">0.30 / 0.022</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">Persons Detected:</span><span id="hud-persons" class="text-emerald-400 font-bold">0</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Confidence:</span><span id="hud-conf" class="text-cyan-300">88%</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">WiFi RSSI:</span><span id="hud-rssi" class="text-gray-300">-42 dBm</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Ocupantes Detectados:</span><span id="hud-persons" class="text-emerald-400 font-bold">1</span></div>
         </div>
 
-        <!-- Seletor Rápido de Cenários -->
+        <!-- Seletor de Cenários Táticos -->
         <div class="space-y-1">
-          <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Scenario [D]:</label>
+          <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Cenário Tático [D]:</label>
           <select id="scenario-select" onchange="changeScenario(this.value)" 
                   class="w-full bg-gray-950 text-xs px-2.5 py-1.5 rounded-xl border border-cyan-800 text-cyan-300 focus:outline-none focus:border-cyan-400 interactive">
-            <option value="auto">Auto-Cycle (30s)</option>
-            <option value="empty" selected>Empty Room</option>
-            <option value="vitals">Vital Signs (Breathing)</option>
-            <option value="multi">Multi-Person Tracking</option>
-            <option value="fall">Fall Detection</option>
-            <option value="apnea">Sleep Monitoring (Apnea)</option>
-            <option value="gait">Elderly Care (Gait)</option>
-            <option value="fitness">Fitness Tracking</option>
-            <option value="intrusion">Intrusion Detection</option>
-            <option value="patrol">Security Patrol</option>
-            <option value="crowd">Crowd Occupancy (4 ppl)</option>
-            <option value="dtw">Gesture Control (DTW)</option>
-            <option value="rescue">Search &amp; Rescue (WiFi-Mat)</option>
+            <option value="vitals" selected>Vital Signs (Normal NLoS)</option>
+            <option value="empty">Empty Room (Sem Pessoas)</option>
+            <option value="multi">Multi-Person Tracking (2 Pessoas)</option>
+            <option value="fall">Fall Detection (Queda)</option>
+            <option value="apnea">Sleep Monitoring (Apneia)</option>
+            <option value="intrusion">Intrusion Detection (Invasão)</option>
+            <option value="crowd">Crowd Occupancy (4 Pessoas)</option>
           </select>
+        </div>
+
+        <!-- Painel de Conexão WebSocket Direta -->
+        <div class="pt-2 border-t border-gray-800 space-y-1.5">
+          <label class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">Conexão WebSocket Live:</label>
+          <div class="flex gap-1.5">
+            <input id="ws-ip-input" type="text" value="192.168.1.50" 
+                   class="w-full bg-gray-950 px-2.5 py-1 rounded-xl border border-gray-700 text-gray-300 text-xs font-mono focus:outline-none focus:border-cyan-400" placeholder="IP_DO_SERVIDOR">
+            <button onclick="connectWebSocket(document.getElementById('ws-ip-input').value, '3000')" 
+                    class="bg-cyan-600 hover:bg-cyan-500 text-xs px-3 py-1 rounded-xl font-bold transition flex-shrink-0">
+              Conectar
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- Preview da Câmera CV quando ativada -->
       <div id="cv-container" class="hidden bg-gray-900/90 backdrop-blur-md p-2 rounded-2xl border border-cyan-500/30 w-48 interactive shadow-2xl">
-        <span class="text-[10px] font-bold text-cyan-400 uppercase block mb-1">Camera CV Feed</span>
+        <span class="text-[10px] font-bold text-cyan-400 uppercase block mb-1">Câmera CV (MediaPipe)</span>
         <canvas id="cv-canvas" class="w-full h-32 bg-black rounded-xl object-cover"></canvas>
       </div>
     </div>
 
-    <!-- Rodapé: Atalhos Teclado & Guia Passthrough -->
+    <!-- Rodapé: Atalhos de Teclado & Guia Passthrough -->
     <div class="flex flex-col sm:flex-row justify-between items-center gap-2 interactive">
       <div class="bg-gray-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 text-[11px] font-mono text-gray-400">
-        [A] Orbit | [D] Scenario | [F] FPS | [S] Settings | [Space] Pause
+        [S] Configurações | [D] Cenários | [Space] Pausar
       </div>
       <div class="bg-gray-900/90 backdrop-blur-md px-5 py-1.5 rounded-full border border-cyan-500/40 text-center shadow-lg">
         <p class="text-xs text-gray-300">
@@ -155,72 +161,57 @@
   </div>
 
   <!-- ==================== DRAWER MODAL DE CONFIGURAÇÕES [S] ==================== -->
-  <div id="settings-modal" class="hidden absolute inset-0 bg-black/60 backdrop-blur-sm z- flex items-center justify-center interactive p-4">
+  <div id="settings-modal" class="hidden absolute inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center interactive p-4">
     <div class="bg-gray-900 border border-cyan-500/40 rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
       
       <!-- Modal Header -->
       <div class="flex justify-between items-center px-6 py-3.5 border-b border-gray-800 bg-gray-950/60">
         <h3 class="font-bold text-sm text-cyan-300 uppercase tracking-wider flex items-center gap-2">
-          <i class="fa-solid fa-sliders"></i> RuView Observatory Settings
+          <i class="fa-solid fa-sliders"></i> Configurações Espaciais do RuView
         </h3>
         <button onclick="toggleSettingsModal()" class="text-gray-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
-      <!-- Modal Body (Abas & Sliders) -->
+      <!-- Modal Body -->
       <div class="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1 text-xs">
         
-        <!-- Style Presets -->
+        <!-- Presets de Estilo Visual -->
         <div>
-          <label class="font-bold text-gray-300 uppercase block mb-2">Style Preset:</label>
-          <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            <button onclick="applyPreset('default')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Foundation</button>
-            <button onclick="applyPreset('cinematic')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Cinematic</button>
-            <button onclick="applyPreset('clean')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Minimal</button>
-            <button onclick="applyPreset('neon')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Neon Glow</button>
-            <button onclick="applyPreset('tactical')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Tactical</button>
-            <button onclick="applyPreset('medical')" class="bg-gray-800 hover:bg-cyan-700 py-1.5 rounded-lg border border-gray-700 font-medium">Medical</button>
+          <label class="font-bold text-gray-300 uppercase block mb-2">Preset de Estilo Visual:</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="applyPreset('neon')" class="bg-gray-800 hover:bg-cyan-700 py-2 rounded-xl border border-gray-700 font-medium text-cyan-300">Neon Glow</button>
+            <button onclick="applyPreset('tactical')" class="bg-gray-800 hover:bg-cyan-700 py-2 rounded-xl border border-gray-700 font-medium text-emerald-300">Tactical Military</button>
+            <button onclick="applyPreset('medical')" class="bg-gray-800 hover:bg-cyan-700 py-2 rounded-xl border border-gray-700 font-medium text-blue-300">Medical Monitor</button>
           </div>
         </div>
 
-        <!-- Wireframe & Joints Controls -->
+        <!-- Ajustes do Esqueleto -->
         <div class="space-y-3 pt-2 border-t border-gray-800">
-          <h4 class="font-bold text-cyan-400 uppercase">Wireframe &amp; Joints</h4>
+          <h4 class="font-bold text-cyan-400 uppercase">Ajuste dos Hologramas 3D</h4>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <div class="flex justify-between text-gray-400 mb-1"><span>Bone Thickness</span><span id="val-thickness">0.018</span></div>
+              <div class="flex justify-between text-gray-400 mb-1"><span>Espessura dos Ossos</span><span id="val-thickness">0.018</span></div>
               <input type="range" min="0.005" max="0.05" step="0.001" value="0.018" oninput="updateSetting('thickness', this.value)" class="w-full accent-cyan-400">
             </div>
             <div>
-              <div class="flex justify-between text-gray-400 mb-1"><span>Joint Size</span><span id="val-jointsize">0.035</span></div>
+              <div class="flex justify-between text-gray-400 mb-1"><span>Tamanho das Articulações</span><span id="val-jointsize">0.035</span></div>
               <input type="range" min="0.01" max="0.08" step="0.005" value="0.035" oninput="updateSetting('jointsize', this.value)" class="w-full accent-cyan-400">
             </div>
           </div>
         </div>
 
-        <!-- Signal & Scene Environment Controls -->
+        <!-- Ajustes do Ambiente e Anel RF -->
         <div class="space-y-3 pt-2 border-t border-gray-800">
-          <h4 class="font-bold text-cyan-400 uppercase">Signal Field &amp; Scene</h4>
+          <h4 class="font-bold text-cyan-400 uppercase">Ambiente &amp; Campo de Sinal</h4>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <div class="flex justify-between text-gray-400 mb-1"><span>Signal Field Opacity</span><span id="val-signal">0.45</span></div>
+              <div class="flex justify-between text-gray-400 mb-1"><span>Opacidade do Anel RF</span><span id="val-signal">0.45</span></div>
               <input type="range" min="0" max="1" step="0.05" value="0.45" oninput="updateSetting('signal', this.value)" class="w-full accent-cyan-400">
             </div>
             <div>
-              <div class="flex justify-between text-gray-400 mb-1"><span>Room Brightness</span><span id="val-brightness">0.70</span></div>
+              <div class="flex justify-between text-gray-400 mb-1"><span>Brilho do Ambiente VR</span><span id="val-brightness">0.70</span></div>
               <input type="range" min="0.1" max="2.0" step="0.05" value="0.70" oninput="updateSetting('brightness', this.value)" class="w-full accent-cyan-400">
             </div>
-          </div>
-        </div>
-
-        <!-- Data Source Config -->
-        <div class="space-y-3 pt-2 border-t border-gray-800">
-          <h4 class="font-bold text-cyan-400 uppercase">Data Source Configuration</h4>
-          <div class="space-y-2">
-            <input id="ws-url-input" type="text" value="ws://localhost:3000/ws" 
-                   class="w-full bg-gray-950 px-3 py-2 rounded-xl border border-gray-700 text-gray-300 focus:outline-none focus:border-cyan-400 font-mono" placeholder="ws://IP_DO_RUVIEW:3000/ws">
-            <button onclick="connectWebSocket()" class="w-full bg-cyan-600 hover:bg-cyan-500 py-2 rounded-xl font-bold transition">
-              Conectar Live WebSocket
-            </button>
           </div>
         </div>
 
@@ -236,7 +227,6 @@
     renderer="alpha: true; colorManagement: true; antialias: true;"
     embedded class="w-full h-full">
 
-    <!-- Iluminação -->
     <a-light id="ambient-light" type="ambient" intensity="0.7"></a-light>
     <a-light type="directional" position="2 4 -2" intensity="0.8"></a-light>
 
@@ -250,20 +240,20 @@
       <a-entity oculus-touch-controls="hand: right"></a-entity>
     </a-entity>
 
-    <!-- Sinal RF / Anel de Fresnel -->
+    <!-- Anel de Varredura de Sinal RF -->
     <a-ring id="signal-ring" position="0 0 -2.5" rotation="-90 0 0" radius-inner="0.3" radius-outer="0.8" color="#00f0ff" opacity="0.45"
             animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; loop: true; dur: 1500"></a-ring>
 
-    <!-- Contêiner de Múltiplos Esqueletos Tridimensionais -->
+    <!-- Contêiner Dinâmico para Múltiplos Esqueletos -->
     <a-entity id="skeletons-group"></a-entity>
 
   </a-scene>
 
-  <!-- ==================== LÓGICA DO MOTOR RUVIEW OBSERVATORY ==================== -->
+  <!-- ==================== LÓGICA E CONEXÃO WEBSOCKET ==================== -->
   <script>
     const telemetryData = JSON.parse(document.getElementById('embedded-telemetry').textContent);
     
-    // Mapeamento das 17 Articulações
+    // Mapeamento das 17 Articulações COCO
     const KEYPOINT_NAMES = [
       'nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
       'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow',
@@ -281,28 +271,27 @@
       ['right_hip', 'right_knee'], ['right_knee', 'right_ankle']
     ];
 
-    // Estado Global da Aplicação
     let state = {
-      scenario: 'empty',
+      scenario: 'vitals',
       jointSize: 0.035,
       boneThickness: 0.018,
       wireframeColor: '#00f0ff',
       jointColor: '#ff4060',
       isPaused: false,
+      isSimulating: true,
       isCVActive: false,
-      autoCycle: false,
       simTime: 0
     };
 
     let activeSkeletons = [];
+    let ws = null;
     let cameraUtils = null;
     let poseNet = null;
 
     document.addEventListener('DOMContentLoaded', () => {
-      // Registrar atalhos de teclado
       window.addEventListener('keydown', handleKeyPress);
 
-      // Listener WebXR Passthrough
+      // Evento de transição para Passthrough AR
       const scene = document.querySelector('a-scene');
       scene.addEventListener('enter-vr', () => {
         if (scene.is('ar-mode')) {
@@ -310,15 +299,72 @@
         }
       });
 
-      // Iniciar com o cenário Padrão
-      changeScenario('empty');
+      changeScenario('vitals');
       requestAnimationFrame(mainRenderLoop);
     });
 
-    // Manipulação de Atalhos de Teclado ([A], [D], [F], [S], [Space])
+    // 1. CONEXÃO WEBSOCKET LIVE EM TEMPO REAL
+    function connectWebSocket(ip, port = "3000") {
+      const wsUrl = `ws://${ip}:${port}/ws`;
+      const statusEl = document.getElementById('conn-status');
+      statusEl.textContent = "Conectando...";
+      statusEl.className = "text-[10px] font-mono text-cyan-400 font-bold animate-pulse";
+
+      if (ws) ws.close();
+
+      try {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          statusEl.textContent = "Live WS Conectado";
+          statusEl.className = "text-[10px] font-mono text-emerald-400 font-bold";
+          state.isSimulating = false;
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            
+            // Atualizar Sinais Vitais
+            if (data.vitals) {
+              document.getElementById('hud-bpm').textContent = `${data.vitals.bpm || data.vitals.heart_rate || 74} BPM`;
+              document.getElementById('hud-rpm').textContent = `${data.vitals.rpm || data.vitals.breathing_rate || 16} RPM`;
+            }
+            
+            // Atualizar RSSI e Confiança
+            if (data.rssi) document.getElementById('hud-rssi').textContent = `${data.rssi} dBm`;
+            if (data.confidence) document.getElementById('hud-conf').textContent = `${Math.round(data.confidence * 100)}%`;
+
+            // Atualizar Esqueleto Tridimensional
+            const joints = data.joints || data.pose_3d_17_keypoints;
+            if (joints && activeSkeletons.length > 0) {
+              updateSkeletonPose(activeSkeletons[0], joints);
+            }
+          } catch (e) {
+            console.error("Erro ao processar pacote WS:", e);
+          }
+        };
+
+        ws.onerror = () => {
+          statusEl.textContent = "Erro na Conexão";
+          statusEl.className = "text-[10px] font-mono text-red-400 font-bold";
+        };
+
+        ws.onclose = () => {
+          statusEl.textContent = "Desconectado (Simulando)";
+          statusEl.className = "text-[10px] font-mono text-amber-400 font-bold";
+          state.isSimulating = true;
+        };
+      } catch (e) {
+        statusEl.textContent = "Falha WS";
+        statusEl.className = "text-[10px] font-mono text-red-400 font-bold";
+        state.isSimulating = true;
+      }
+    }
+
+    // 2. ATALHOS DE TECLADO ([S], [D], [Space])
     function handleKeyPress(e) {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-      
       const key = e.key.toLowerCase();
       if (key === 's') toggleSettingsModal();
       if (key === ' ') state.isPaused = !state.isPaused;
@@ -333,18 +379,15 @@
       document.getElementById('settings-modal').classList.toggle('hidden');
     }
 
-    // Alteração de Cenários do RuView Observatory
+    // 3. ALTERAÇÃO DE CENÁRIOS
     function changeScenario(scenKey) {
       state.scenario = scenKey;
-      state.autoCycle = (scenKey === 'auto');
-
       const group = document.getElementById('skeletons-group');
       group.innerHTML = '';
       activeSkeletons = [];
 
       const scenInfo = telemetryData.scenarios_data[scenKey] || telemetryData.scenarios_data['vitals'];
       
-      // Atualizar HUD
       document.getElementById('hud-bpm').textContent = scenInfo.bpm ? `${scenInfo.bpm} BPM` : '-- BPM';
       document.getElementById('hud-rpm').textContent = scenInfo.rpm !== undefined ? `${scenInfo.rpm} RPM` : '-- RPM';
       document.getElementById('hud-persons').textContent = scenInfo.persons;
@@ -353,7 +396,6 @@
       badge.textContent = scenInfo.status;
       badge.style.color = scenInfo.color;
 
-      // Criar a quantidade necessária de esqueletos para o cenário
       for (let i = 0; i < scenInfo.persons; i++) {
         const skelEntity = createSkeletonEntity(i, scenInfo.persons);
         group.appendChild(skelEntity.container);
@@ -361,7 +403,7 @@
       }
     }
 
-    // Gerar Entidade 3D de Esqueleto com 17 Keypoints
+    // 4. CRIAÇÃO DAS ENTIDADES 3D DE ESQUELETO E HUDS
     function createSkeletonEntity(index, total) {
       const container = document.createElement('a-entity');
       const offsetX = (index - (total - 1) / 2) * 1.6;
@@ -390,40 +432,57 @@
         boneEls.push(cyl);
       });
 
+      // HUD 3D Flutuante sobre o Alvo
+      const hudPlane = document.createElement('a-plane');
+      hudPlane.setAttribute('position', '0 2.1 0');
+      hudPlane.setAttribute('width', '1.6');
+      hudPlane.setAttribute('height', '0.5');
+      hudPlane.setAttribute('color', '#0b1329');
+      hudPlane.setAttribute('opacity', '0.85');
+
+      const hudText = document.createElement('a-text');
+      hudText.setAttribute('value', `ALVO #${index + 1}\nWi-Fi CSI NLoS`);
+      hudText.setAttribute('align', 'center');
+      hudText.setAttribute('scale', '0.45 0.45 0.45');
+      hudText.setAttribute('color', '#00f0ff');
+      hudPlane.appendChild(hudText);
+
+      container.appendChild(hudPlane);
+
       return { container, jointEls, boneEls, offsetX };
     }
 
-    // Renderizar Esqueleto na Posição Correta
+    // 5. ATUALIZAÇÃO TRIDIMENSIONAL DAS ARTICULAÇÕES E OSSOS
     function updateSkeletonPose(skel, joints) {
       Object.keys(joints).forEach(j => {
         if (skel.jointEls[j]) {
           const pos = joints[j];
-          skel.jointEls[j].setAttribute('position', `${pos} ${pos} ${pos}`);
+          skel.jointEls[j].setAttribute('position', `${pos[0]} ${pos[1]} ${pos[2]}`);
         }
       });
 
       BONE_CONNECTIONS.forEach((pair, idx) => {
-        const p1 = joints[pair];
-        const p2 = joints[pair];
+        const p1 = joints[pair[0]];
+        const p2 = joints[pair[1]];
         if (p1 && p2 && skel.boneEls[idx]) {
           const cyl = skel.boneEls[idx];
-          const mid = [(p1+p2)/2, (p1+p2)/2, (p1+p2)/2];
-          const d = [p2-p1, p2-p1, p2-p1];
-          const dist = Math.sqrt(d*d + d*d + d*d);
+          const mid = [(p1[0]+p2[0])/2, (p1[1]+p2[1])/2, (p1[2]+p2[2])/2];
+          const d = [p2[0]-p1[0], p2[1]-p1[1], p2[2]-p1[2]];
+          const dist = Math.sqrt(d[0]*d[0] + d[1]*d[1] + d[2]*d[2]);
 
-          cyl.setAttribute('position', `${mid} ${mid} ${mid}`);
+          cyl.setAttribute('position', `${mid[0]} ${mid[1]} ${mid[2]}`);
           cyl.setAttribute('height', dist || 0.01);
 
-          const rotX = Math.atan2(Math.sqrt(d*d + d*d), d) * (180 / Math.PI);
-          const rotY = Math.atan2(d, d) * (180 / Math.PI);
+          const rotX = Math.atan2(Math.sqrt(d[0]*d[0] + d[2]*d[2]), d[1]) * (180 / Math.PI);
+          const rotY = Math.atan2(d[0], d[2]) * (180 / Math.PI);
           cyl.setAttribute('rotation', `${rotX} ${rotY} 0`);
         }
       });
     }
 
-    // Motor de Animação e Simulação Cinemática
+    // 6. MOTOR DE ANIMAÇÃO & SIMULAÇÃO FALLBACK
     function mainRenderLoop() {
-      if (!state.isPaused) {
+      if (!state.isPaused && state.isSimulating && !state.isCVActive) {
         state.simTime += 0.03;
 
         activeSkeletons.forEach((skel, i) => {
@@ -449,7 +508,7 @@
 
           Object.keys(baseCoords).forEach(k => {
             const c = baseCoords[k];
-            joints[k] = [c + Math.sin(state.simTime + i) * 0.005, c, c];
+            joints[k] = [c[0] + Math.sin(state.simTime + i) * 0.005, c[1], c[2]];
           });
 
           updateSkeletonPose(skel, joints);
@@ -459,7 +518,7 @@
       requestAnimationFrame(mainRenderLoop);
     }
 
-    // Atualização Dinâmica de Configurações
+    // 7. AJUSTE DE CONFIGURAÇÕES E PRESETS VISUAIS
     function updateSetting(key, val) {
       if (key === 'thickness') {
         state.boneThickness = parseFloat(val);
@@ -477,9 +536,9 @@
         document.getElementById('signal-ring').setAttribute('opacity', val);
         document.getElementById('val-signal').textContent = val;
       }
+      changeScenario(state.scenario);
     }
 
-    // Presets de Estilo Visual
     function applyPreset(type) {
       if (type === 'neon') {
         state.wireframeColor = '#00f0ff';
@@ -494,16 +553,19 @@
       changeScenario(state.scenario);
     }
 
-    // Ativar Câmera CV (MediaPipe Pose)
+    // 8. ATIVAR CÂMERA CV (MEDIAPIPE POSE)
     async function toggleComputerVision() {
       const container = document.getElementById('cv-container');
+      const btn = document.getElementById('btn-toggle-cv');
+
       if (!state.isCVActive) {
         container.classList.remove('hidden');
         state.isCVActive = true;
-        // Iniciar MediaPipe no canvas de preview
+        btn.innerHTML = `<i class="fa-solid fa-stop"></i> Parar Câmera CV`;
       } else {
         container.classList.add('hidden');
         state.isCVActive = false;
+        btn.innerHTML = `<i class="fa-solid fa-video"></i> Câmera CV`;
       }
     }
   </script>
